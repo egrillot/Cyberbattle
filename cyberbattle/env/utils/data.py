@@ -45,7 +45,7 @@ class Data_source:
         self.last_call = last_call
 
     def get_data_source(self) -> str:
-        """Return Data_source data_source."""
+        """Return the data_source name."""
         return self.data_source
 
     def get_description(self) -> str:

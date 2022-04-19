@@ -12,6 +12,7 @@ class Log:
         source_id: int,
         target_id: int,
         action_id: int,
+        service_id: int,
         error: int=0
     ) -> None:
         """Init the log.
@@ -20,20 +21,22 @@ class Log:
         source_id: source ip adress (int)
         target_id: machine ip adress sending the log (int)
         action_id: integer corresponding to the attempted data type on the target machine (int)
+        service_id: service id corresponding to the service used by the user (int)
         error: 0 if the action was successful and 1 otherwise, defaut value: 1 (int).
         Output: None.
         """
         self.source_id = source_id
         self.target_id = target_id
         self.action_id = action_id
+        self.service_id = service_id
         self.error = error
 
     def get_vector(self) -> np.ndarray:
         """Return the vector the SOC analyst agent will read.
         
-        Output: array of shape (4,).
+        Output: array of shape (5,).
         """
-        return np.array([self.source_id, self.target_id, self.action_id, self.error])
+        return np.array([self.source_id, self.target_id, self.action_id, self.service_id, self.error])
 
 
 class Rule(IntEnum):

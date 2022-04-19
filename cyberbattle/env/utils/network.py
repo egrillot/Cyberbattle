@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 
 from typing import List
 from PIL import Image
-from . import machine
+from .machine import Machine
 
 
 class Network:
     """Defines the whole environment where agents will fight."""
 
-    def __init__(self, machines: List[machine.Machine], name: str):
+    def __init__(self, machines: List[Machine], name: str):
         """Create a networkx object to define the environment and assigns for each machine the machines accessible from it.
         
         Input:
@@ -24,6 +24,7 @@ class Network:
             raise ValueError("Machine instance names aren't unique.")
 
         self.name = name
+        self.machine_list = machines
         self.ip_adresses_encoder = dict() # encode an ip adress to an index
         self.machine_count = len(machines)
         self.ip_to_machine = dict([(m.get_ip_adress(), m) for m in machines])
@@ -74,7 +75,7 @@ class Network:
 
                     idx1 = self.instance_name_to_index[machine1]
                     idx2 = self.instance_name_to_index[machine2]
-                    self.paths[idx1, idx2] = paths[0]
+                    self.paths[idx1, idx2] = [self.instance_name_to_machine[m] for m in paths[0]]
                     
     
     def display(self, save_figure: str=None, annotations: bool=False) -> None:
@@ -129,8 +130,18 @@ class Network:
 
             fig.savefig(save_figure)
         
-    
     def get_paths(self) -> np.ndarray:
         """Return network paths."""
         return self.paths
+    
+    def get_path(self, machine1: str, machine2: str) -> List[Machine]:
+        """Return the path linking both machines."""
+        idx1 = self.instance_name_to_index[machine1]
+        idx2 = self.instance_name_to_index[machine2]
+
+        return self.paths[idx1, idx2]
+    
+    def get_machine_list(self) -> List[Machine]:
+        """Return the machine list."""
+        return self.machine_list
                 

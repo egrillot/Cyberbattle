@@ -2,25 +2,28 @@
 
 from typing import Dict, List
 import random
-import numpy as np
 
 from .data import *
-from .machine import Machine, get_machines_by_name
+from .machine import Machine
 
 
 class Activity:
     """Define an user activity during an environment step."""
 
-    def __init__(self, activity: bool, where: str, who: str, action: str=None) -> None:
+    def __init__(self, source: str, activity: bool=False, where: str=None, action: str=None, service: str=None) -> None:
         """Init the activity.
         
         Input:
-        activity: if there is one (bool)
-        where: the instance name of the machine where the activity takes place (str)
+        source: The name of the machine from which the action originated (str)
+        activity: indicates whether or not an activity is taking place (bool), default value is False
+        where: the instance name of the machine where the activity takes place (str), default value is None
         action: the action comitted (str), default value is None
-        who: the profile instance name who is doing the action.
+        service: the service the user want to use to perform the activity (str), default value is None.
         Output: None
         """
+        if not source:
+            raise ValueError("Please indicate the source of the activity, even if the user have no activity.")
+
         self.activity = activity
 
         if activity:
@@ -28,9 +31,16 @@ class Activity:
             if not action:
                 raise ValueError('Please indicate the source of the data requested.')
             
+            if not where:
+                raise ValueError('Please indicate where the action takes place.')
+            
+            if not service:
+                raise ValueError('Please indicate the service the user want to use to perform the activity.')
+            
         self.action = action
         self.where = where
-        self.who = who
+        self.source = source
+        self.service = service
     
     def is_activity(self) -> str:
         """Return whether there is activity or not."""
@@ -44,40 +54,32 @@ class Activity:
         """Return the action comitted."""
         return self.action
 
-    def get_who(self) -> str:
-        """Return who did the action."""
-        return self.who
+    def get_source(self) -> str:
+        """Return the action source."""
+        return self.source
 
+    def get_service(self) -> str:
+        """Return the service used."""
+        return self.service
 
 class Profile:
     """Defines the user profile."""
 
-    def __init__(self, name: str, data_source_distribution: Dict[Data_source, float], based_on: List[str]) -> None:
+    def __init__(self, name: str, data_source_distribution: Dict[Data_source, float]) -> None:
         """Init the profile.
         
         Input: 
         name: profile name (str)
-        data_source_distribution: the probability distribution of requesting a data source (Dict[Data_source, float])
-        based_on: typical machine instance names commonly used by the profile (List[str]).
+        data_source_distribution: the probability distribution of requesting a data source (Dict[Data_source, float]).
         Output: None.
         """
         s = sum(data_source_distribution.values())
         if s > 1 or s < 0:
             raise ValueError('The sum of the given probabilities : {}, is not between 0 and 1.'.format(s))
 
-        if 'PC' not in based_on:
-            print('One PC has been added to the list of machines used by the profile: {}'.format(name))
-            based_on.append('PC')
-        
-        no_solicitation_prob = 1 - s
-        
-        if len(based_on) <= 1:
-            raise ValueError('Please indicate at least one more machine ip adress where the profile may have an activity')
-
         self.name = name
         self.data_source_distribution = data_source_distribution
-        self.no_solicitation_prob = no_solicitation_prob
-        self.based_on = based_on
+        self.no_solicitation_prob = 1 - s
     
     def set_instance_name(self, instance_name: str) -> None:
         """Set instance name."""
@@ -87,54 +89,65 @@ class Profile:
         """Return the profile name."""
         return self.name
     
-    def get_machines_based_on(self) -> List[str]:
-        """Return machines where the profile can operate."""
-        return self.based_on
+    def set_PC(self, pc_instance_name: str) -> None:
+        """Set the pc the user is base on."""
+        self.PC = pc_instance_name
     
+    def get_PC_instance_name(self) -> str:
+        """Return the PC instance name the user is based on."""
+        if not self.PC:
+            raise ValueError("The PC instance name the user is base on has not been yet set.")
+        
+        return self.PC
+
     def get_data_source_distribution(self) -> Dict[Data_source, float]:
         """Return the profile data source distribution."""
         return self.data_source_distribution
     
-    def on_step(self, p: float) -> Activity:
+    def on_step(self, p: float, network_machines: List[Machine]) -> Activity:
         """Return an activity on an environment step with respect to the probability distribution.
         
         Input: p which correspond to a probability following an uniform law over [0, 1] (float).
         Output: activity (Activity).
         """
-        where = random.choice(self.based_on)
-
         if p <= self.no_solicitation_prob:
 
-            return Activity(
-                activity=False,
-                where=where,
-                who=self.instance_name
-                )
+            return Activity(who=self.PC)
         
         else:
 
             p -= self.no_solicitation_prob
             data_source_distribution = list(self.data_source_distribution.items())
             n_data_source = len(data_source_distribution)
+            data_source = data_source_distribution[0][1]
 
-            if p <= data_source_distribution[0][1]:
+            if p <= data_source:
+
+                machines = [(m.get_instance_name(), m.get_service_name(data_source)) for m in network_machines if m.is_data_source_available(data_source)]
+                where, service = random.choice(machines)
 
                 return Activity(
                     activity=True,
                     action=data_source_distribution[0][0].call(),
                     where=where,
-                    who=self.instance_name
+                    who=self.PC,
+                    service=service
                     )
 
             for i in range(1, n_data_source):
 
                 if p >= data_source_distribution[i-1][1] and p <= data_source_distribution[i][1]:
 
+                    data_source = data_source_distribution[i][1]
+                    machines = [(m.get_instance_name(), m.get_service_name(data_source)) for m in network_machines if m.is_data_source_available(data_source)]
+                    where, service = random.choice(machines)
+
                     return Activity(
                         activity=True,
                         action=data_source_distribution[i][0].call(),
                         where=where,
-                        who=self.instance_name
+                        who=self.PC,
+                        service=service
                         )
 
 
@@ -145,7 +158,8 @@ class DSI(Profile):
         name = 'DSI'
         data_source_distribution = {
             CloudStorage(): 0.4,
-            CloudService(): 0.4,
+            CloudService(): 0.2,
+            Driver(): 0.2,
             ScheduledJob(): 0.1
         }
         super().__init__(name, data_source_distribution, based_on)
@@ -157,8 +171,9 @@ class Dev(Profile):
     def __init__(self, based_on: List[str]) -> None:
         name = 'Dev'
         data_source_distribution = {
-            Script(): 0.4,
-            Process(): 0.4
+            Script(): 0.3,
+            Process(): 0.2,
+            File(): 0.2
         }
         super().__init__(name, data_source_distribution, based_on)
 
@@ -174,7 +189,7 @@ class EnvironmentProfiles:
         machines: list of running machine isntance name (List[Machine]).
         """
         self.profiles: List[Profile] = []
-        self.nb_profile = sum([n for (p, n) in profiles.items() if len(p.get_machines_based_on()) != 0])
+        self.nb_profile = sum([n for _, n in profiles.items()])
         given_PC_count = 0
         total_available_PC = [m.get_instance_name() for m in machines if (m.get_name() == 'PC' and not m.is_infected)]
 
@@ -187,25 +202,14 @@ class EnvironmentProfiles:
                 raise ValueError('Undefined profile class: {}'.format(profile))
 
             nb_profile = profiles[profile]
-            machines_based_on = profile.get_machines_based_on()
-            potential_machines : List[Machine] = []
-
-            for machine in machines_based_on:
-
-                remained_machines = get_machines_by_name(machine, machines)
-
-                if len(set(total_available_PC).intersection(remained_machines)) != 0:
-
-                    remained_machines = [total_available_PC[given_PC_count]]
-                    given_PC_count += 1
-                
-                potential_machines += remained_machines
 
             for j in range(nb_profile):
 
-                p = profile.__class__(based_on=[m.get_instance_name() for m in potential_machines])
+                p = profile.__class__()
                 p.set_instance_name(profile.get_name() + '_' + str(j+1))
+                p.set_PC('PC_' + str(given_PC_count))
                 self.profiles.append(p)
+                given_PC_count += 1
     
     def on_step(self) -> List[Activity]:
         """Return an array of activities.
