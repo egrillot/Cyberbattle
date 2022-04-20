@@ -119,63 +119,50 @@ class Profile:
             p -= self.no_solicitation_prob
             data_source_distribution = list(self.data_source_distribution.items())
             n_data_source = len(data_source_distribution)
-            data_source = data_source_distribution[0][1]
 
-            if p <= data_source:
+            if p <= data_source_distribution[0][1]:
 
+                data_source = data_source_distribution[i][0].get_data_source()
                 machines = [(m.get_instance_name(), m.get_service_name(data_source)) for m in network_machines if m.is_data_source_available(data_source)]
-                where, service = random.choice(machines)
 
-                return Activity(
-                    activity=True,
-                    action=data_source_distribution[0][0].call(),
-                    where=where,
-                    who=self.PC,
-                    service=service
-                    )
+                if len(machines) == 0:
 
-            for i in range(1, n_data_source):
+                    raise ValueError("The user {} wanted to use the data source {} but no machine in the environment provides this service.".format(self.name, data_source))
+                
+                else:
 
-                if p >= data_source_distribution[i-1][1] and p <= data_source_distribution[i][1]:
-
-                    data_source = data_source_distribution[i][1]
-                    machines = [(m.get_instance_name(), m.get_service_name(data_source)) for m in network_machines if m.is_data_source_available(data_source)]
                     where, service = random.choice(machines)
 
                     return Activity(
                         activity=True,
-                        action=data_source_distribution[i][0].call(),
+                        action=data_source_distribution[0][0].call(),
                         where=where,
                         who=self.PC,
                         service=service
                         )
 
+            for i in range(1, n_data_source):
 
-class DSI(Profile):
-    """DSI profile."""
+                if p >= data_source_distribution[i-1][1] and p <= data_source_distribution[i][1]:
 
-    def __init__(self, based_on: List[str]) -> None:
-        name = 'DSI'
-        data_source_distribution = {
-            CloudStorage(): 0.4,
-            CloudService(): 0.2,
-            Driver(): 0.2,
-            ScheduledJob(): 0.1
-        }
-        super().__init__(name, data_source_distribution, based_on)
+                    data_source = data_source_distribution[i][0].get_data_source()
+                    machines = [(m.get_instance_name(), m.get_service_name(data_source)) for m in network_machines if m.is_data_source_available(data_source)]
 
+                    if len(machines) == 0:
 
-class Dev(Profile):
-    """Dev class."""
+                        raise ValueError("The user {} wanted to use the data source {} but no machine in the environment provides this service.".format(self.name, data_source_distribution[i][0].get_data_source()))                 
+                    
+                    else:
 
-    def __init__(self, based_on: List[str]) -> None:
-        name = 'Dev'
-        data_source_distribution = {
-            Script(): 0.3,
-            Process(): 0.2,
-            File(): 0.2
-        }
-        super().__init__(name, data_source_distribution, based_on)
+                        where, service = random.choice(machines)
+
+                        return Activity(
+                            activity=True,
+                            action=data_source_distribution[i][0].call(),
+                            where=where,
+                            who=self.PC,
+                            service=service
+                            )
 
 
 class EnvironmentProfiles:
@@ -191,6 +178,7 @@ class EnvironmentProfiles:
         self.profiles: List[Profile] = []
         self.nb_profile = sum([n for _, n in profiles.items()])
         given_PC_count = 0
+        self.network_machines = machines
         total_available_PC = [m.get_instance_name() for m in machines if (m.get_name() == 'PC' and not m.is_infected)]
 
         if len(total_available_PC) != self.nb_profile:
@@ -222,7 +210,7 @@ class EnvironmentProfiles:
 
         for i in range(self.nb_profile):
 
-            output.append(self.profiles[i].on_step(p))
+            output.append(self.profiles[i].on_step(p, self.network_machines))
         
         return output
 
@@ -243,3 +231,30 @@ class EnvironmentProfiles:
     def get_profile_count(self) -> int:
         """Return the profile count."""
         return self.nb_profile
+
+
+class DSI(Profile):
+    """DSI profile."""
+
+    def __init__(self) -> None:
+        name = 'DSI'
+        data_source_distribution = {
+            CloudStorage(): 0.4,
+            CloudService(): 0.2,
+            Driver(): 0.2,
+            ScheduledJob(): 0.1
+        }
+        super().__init__(name, data_source_distribution)
+
+
+class Dev(Profile):
+    """Dev class."""
+
+    def __init__(self) -> None:
+        name = 'Dev'
+        data_source_distribution = {
+            Script(): 0.3,
+            Process(): 0.2,
+            File(): 0.2
+        }
+        super().__init__(name, data_source_distribution)

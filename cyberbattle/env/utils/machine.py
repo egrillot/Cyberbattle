@@ -1,7 +1,7 @@
 """Provide classes to define network components, all classes inherit from the Machine class."""
 
 
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from .data import Data_source
 from ...vulnerabilities.outcomes import Outcome
 from .flow import Traffic, Rule
@@ -19,7 +19,7 @@ class Machine:
         outcomes: List[Outcome]=[],
         value: int=0,
         is_infected: bool=False,
-        data_sources: Dict[str, List[Data_source]]=[]
+        data_sources: Dict[str, List[Data_source]]=dict()
     ):
         """Init.
         
@@ -115,7 +115,7 @@ class Machine:
 class Plug(Machine):
     """Connector for linking several machines."""
 
-    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False):
+    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init the connected machine to the plug."""
 
         if len(connected_machines) <= 1:
@@ -123,13 +123,13 @@ class Plug(Machine):
 
         name = 'Plug'
         url_image = './env/images/Switch.jpg'
-        super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected)
+        super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected, data_sources)
 
 
 class Firewall(Machine):
     """Firewall class."""
 
-    def __init__(self, incomings: List[Traffic], outgoings: List[Traffic], instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False):
+    def __init__(self, incomings: List[Traffic], outgoings: List[Traffic], instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init incoming and outgoing traffic rules.
         
         Inputs:
@@ -143,7 +143,7 @@ class Firewall(Machine):
         self.outgoings = outgoings
         name = 'Firewall'
         url_image = './env/images/Firewall.jpg'
-        super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected)
+        super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected, data_sources)
     
     def is_passing(self, port_name: str, coming_from: Machine) -> bool:
         """Check if the providing request can pass the firewall in the providing direction.
@@ -171,28 +171,45 @@ class Firewall(Machine):
 class Client(Machine):
     """Client class."""
 
-    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False):
+    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init."""
         name = 'PC'
         url_image = './env/images/PC.png'
-        super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected)
+        super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected, data_sources)
 
 
 class Server(Machine):
     """Server class."""
 
-    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False):
+    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init."""
         name = 'Server'
         url_image = './env/images/Server.png'
-        super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected)
+        super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected, data_sources)
 
 
 class Cloud(Machine):
     """Clourd class (external servers)."""
 
-    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False):
+    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init."""
         name = 'Cloud'
         url_image = './env/images/Cloud.jpg'
-        super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected)
+        super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected, data_sources)
+
+
+def get_machines_by_name(name: str, machines: List[Machine]) -> List[Machine]:
+    """Return a list of machines whose instance name corresponds to the entry name."""
+    return [m for m in machines if m.get_instance_name() == name]
+
+
+def firewall_instances(path: List[Machine]) -> List[Tuple[Machine, Firewall]]:
+    """Return the list of firewalls in the path with the machine from where the traffic is coming."""
+    firewalls = []
+    for i, m in enumerate(path):
+
+        if isinstance(m, Firewall):
+
+            firewalls.append((path[i-1], m))
+    
+    return firewalls

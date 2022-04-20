@@ -1,13 +1,15 @@
 """This file provides the requested data source that the SOC analyst can observe on a machine."""
 
+from copy import deepcopy
 from typing import List
 import numpy as np
+from ...utils.functions import kahansum
 
 class Data_source:
     """Data_source class."""
 
     def __init__(self, data_source: str, description: str, actions: List[str], initial_distribution: np.ndarray, transition_matrix: np.ndarray, last_call: str='Stop') -> None:
-        """Init data_source and description."""
+        """Init data_source, description and the markov process."""
         if 'Stop' not in actions:
             actions.append('Stop')
         
@@ -21,7 +23,7 @@ class Data_source:
         if initial_distribution_shape[0] != action_count - 1:
             raise ValueError('The provided initial distribution is a {} dimensional vector but it requires a {} dimensional vector'.format(initial_distribution_shape[0], action_count-1))
 
-        if np.sum(initial_distribution) != 1:
+        if kahansum(initial_distribution) != 1:
             raise ValueError("The sum over the initial distribution : {} isn't equal to 1.".format(initial_distribution))
         
         if len(transition_matrix_shapes) != 2:
@@ -32,12 +34,12 @@ class Data_source:
 
         for i in range(action_count):
 
-            if np.sum(transition_matrix[i, :]) != 1:
+            if kahansum(transition_matrix[i, :]) != 1:
                 raise ValueError("The sum over the row {} in the transition matrix isn't equal to 1".format(i))
             
         self.data_source = data_source
         self.description = description
-        self.actions = actions
+        self.actions = deepcopy(actions)
         actions.remove('Stop')
         self.initial_actions = actions
         self.initial_distribution = initial_distribution
@@ -89,8 +91,8 @@ class ActiveDirectory(Data_source):
             [0.02, 0.2, 0.09, 0.09, 0.2, 0.4],
             [0.02, 0.08, 0.1, 0.1, 0.2, 0.5],
             [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
-            [0.04, 0.04, 0.03, 0.1, 0.2, 0.5],
-            [0.04, 0.04, 0.03, 0.1, 0.2, 0.5],
+            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
+            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         ])
         
@@ -286,8 +288,8 @@ class File(Data_source):
             [0.02, 0.2, 0.09, 0.09, 0.2, 0.4],
             [0.02, 0.08, 0.1, 0.1, 0.2, 0.5],
             [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
-            [0.04, 0.04, 0.03, 0.1, 0.2, 0.5],
-            [0.04, 0.04, 0.03, 0.1, 0.2, 0.5],
+            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
+            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         ])
         
@@ -659,8 +661,8 @@ class Snapshot(Data_source):
             [0.02, 0.2, 0.09, 0.09, 0.2, 0.4],
             [0.02, 0.08, 0.1, 0.1, 0.2, 0.5],
             [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
-            [0.04, 0.04, 0.03, 0.1, 0.2, 0.5],
-            [0.04, 0.04, 0.03, 0.1, 0.2, 0.5],
+            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
+            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         ])
         
@@ -680,8 +682,8 @@ class UserAccount(Data_source):
             [0.02, 0.2, 0.09, 0.09, 0.2, 0.4],
             [0.02, 0.08, 0.1, 0.1, 0.2, 0.5],
             [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
-            [0.04, 0.04, 0.03, 0.1, 0.2, 0.5],
-            [0.04, 0.04, 0.03, 0.1, 0.2, 0.5],
+            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
+            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         ])
         
@@ -701,8 +703,8 @@ class Volume(Data_source):
             [0.02, 0.2, 0.09, 0.09, 0.2, 0.4],
             [0.02, 0.08, 0.1, 0.1, 0.2, 0.5],
             [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
-            [0.04, 0.04, 0.03, 0.1, 0.2, 0.5],
-            [0.04, 0.04, 0.03, 0.1, 0.2, 0.5],
+            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
+            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         ])
         
@@ -759,19 +761,3 @@ class WMI(Data_source):
             [0.0, 1.0]
         ])
         super().__init__(data_source, description, actions, initial_distribution, transition_matrix)
-
-
-def get_data_source(hash_encoding_data_sources: List[int]) -> List[Data_source]:
-    """Return the data source classes correponding to the provided list of hashed data sources.
-    
-    Input: list of int
-    Ouput: list of Data_source.
-    """
-    data_source_classes = []
-    for child in Data_source.__subclasses__():
-        ds = child()
-        if ds.get_hash_encoding() in hash_encoding_data_sources:
-
-            data_source_classes.append(ds)
-    
-    return data_source_classes

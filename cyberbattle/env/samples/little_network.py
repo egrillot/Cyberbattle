@@ -2,81 +2,88 @@
 
 
 from typing import List
-from ..utils import flow, user, machine, network
-from ...vulnerabilities import outcomes
+from ...vulnerabilities.outcomes import Escalation, LeakedCredentials, LeakedMachineIP, LateralMove, Reconnaissance
+from ..utils.user import DSI, Dev, EnvironmentProfiles
+from ..utils.network import Network
+from ..utils.data import CloudService, CloudStorage, Driver, ScheduledJob, Script, Process, File
+from ..utils.flow import Traffic, Rule, UserRight, Credential
+from ..utils.machine import Machine, Firewall, Client, Plug, Cloud, Server
 
-def get_machine_list(num_client) -> List[machine.Machine]:
+
+client_services = {
+    'sudo': [Script(), Process(), File()]
+}
+
+googledrive_services = {
+    "HTTPS": [Driver(), CloudStorage(), CloudService()]
+}
+
+servermail_services = {
+    "HTTPS": [CloudStorage(), CloudService()]
+}
+
+database_services = {
+    "HTTPS": [CloudStorage(), CloudService(), ScheduledJob()]
+}
+
+def get_machine_list(num_client) -> List[Machine]:
     """Return list of machines to build the environment."""
 
     client_machines = [
-        machine.Client(instance_name='PC_{}'.format(i+2), platforms=['Windows'], connected_machines=['Switch_1'], value=0)
+        Client(instance_name='PC_{}'.format(i+2), platforms=['Windows'], connected_machines=['Switch_1'], value=0, data_sources=client_services)
         for i in range(num_client - 2)
         ] + [
-            machine.Client(instance_name='PC_1', platforms=['Windows'], connected_machines=['Switch_1'], value=0, is_infected=True, outcomes=[
-                outcomes.Escalation(userright=flow.UserRight.ADMIN),
-                outcomes.LeakedMachineIP(machine_ip=['CommunicationServer'])
-            ])
+            Client(instance_name='PC_1', platforms=['Windows'], connected_machines=['Switch_1'], value=0, is_infected=True, data_sources=client_services)
         ] + [
-            machine.Client(instance_name='PC_{}'.format(num_client), platforms=['Windows'], connected_machines=['Switch_1'], value=0, outcomes=[
-                outcomes.LateralMove()
-            ])
+            Client(instance_name='PC_{}'.format(num_client), platforms=['Windows'], connected_machines=['Switch_1'], value=0, data_sources=client_services)
         ]
 
     plug_machines = [
-        machine.Plug(instance_name='Switch_1', platforms=[], connected_machines=['PC_{}'.format(i+1) for i in range(num_client)]+['Router']),
-        machine.Plug(instance_name='Switch_2', platforms=[], connected_machines=['DatabaseServer', 'MailServer', 'CommunicationServer', 'Firewall_1']),
-        machine.Plug(instance_name='Router', platforms=[], connected_machines=['Switch_1', 'Firewall_1', 'Firewall_2'])
+        Plug(instance_name='Switch_1', platforms=[], connected_machines=['PC_{}'.format(i+1) for i in range(num_client)]+['Router']),
+        Plug(instance_name='Switch_2', platforms=[], connected_machines=['DatabaseServer', 'MailServer', 'CommunicationServer', 'Firewall_1']),
+        Plug(instance_name='Router', platforms=[], connected_machines=['Switch_1', 'Firewall_1', 'Firewall_2'])
         ]
     
     internal_servers = [
-        machine.Server(instance_name='DatabaseServer', platforms=['IaaS'], connected_machines=['Switch_2'], value=1000, outcomes=[
-            outcomes.Reconnaissance('confidential folder', 100),
-            outcomes.LeakedCredentials(credentials=[
-                flow.Credential(port='HTTPS', machine='GoogleDrive', cred='DSI_password')
-            ])
-        ]),
-        machine.Server(instance_name='MailServer', platforms=['PRE'], connected_machines=['Switch_2'], value=200),
-        machine.Server(instance_name='CommunicationServer', platforms=['Pre'], connected_machines=['Switch_2'], value=200)
+        Server(instance_name='DatabaseServer', platforms=['IaaS'], connected_machines=['Switch_2'], value=1000, data_sources=database_services),
+        Server(instance_name='MailServer', platforms=['PRE'], connected_machines=['Switch_2'], value=200, data_sources=servermail_services),
+        Server(instance_name='CommunicationServer', platforms=['Pre'], connected_machines=['Switch_2'], value=200, data_sources=servermail_services)
     ]
 
     external_servers = [
-        machine.Cloud(instance_name='GoogleDrive', platforms=['Google Workspace'], connected_machines=['Firewall_2'], value=500)
+        Cloud(instance_name='GoogleDrive', platforms=['Google Workspace'], connected_machines=['Firewall_2'], value=500, data_sources=googledrive_services)
     ]
 
     firewalls = [
-        machine.Firewall(
+        Firewall(
             instance_name='Firewall_1',
             platforms=[],
             connected_machines=['Router', 'Switch_2'],
             incomings=[
-                flow.Traffic(port='HTTPS', rule=flow.Rule.ALLOWED),
-                flow.Traffic(port='HTTP', rule=flow.Rule.ALLOWED),
-                flow.Traffic(port='SSH', rule=flow.Rule.ALLOWED)
+                Traffic(port='HTTPS', rule=Rule.ALLOWED),
+                Traffic(port='sudo', rule=Rule.ALLOWED)
             ],
             outgoings=[
-                flow.Traffic(port='HTTPS', rule=flow.Rule.ALLOWED),
-                flow.Traffic(port='HTTP', rule=flow.Rule.ALLOWED),
-                flow.Traffic(port='SSH', rule=flow.Rule.ALLOWED)
+                Traffic(port='HTTPS', rule=Rule.ALLOWED),
+                Traffic(port='sudo', rule=Rule.ALLOWED)
             ]
         ),
-        machine.Firewall(
+        Firewall(
             instance_name='Firewall_2',
             platforms=[],
             connected_machines=['Router', 'GoogleDrive'],
             incomings=[
-                flow.Traffic(port='HTTPS', rule=flow.Rule.ALLOWED),
-                flow.Traffic(port='HTTP', rule=flow.Rule.ALLOWED),
-                flow.Traffic(port='SSH', rule=flow.Rule.ALLOWED)
+                Traffic(port='HTTPS', rule=Rule.ALLOWED),
+                Traffic(port='sudo', rule=Rule.ALLOWED)
             ],
             outgoings=[
-                flow.Traffic(port='HTTPS', rule=flow.Rule.ALLOWED),
-                flow.Traffic(port='HTTP', rule=flow.Rule.ALLOWED),
-                flow.Traffic(port='SSH', rule=flow.Rule.ALLOWED)
+                Traffic(port='HTTPS', rule=Rule.ALLOWED),
+                Traffic(port='sudo', rule=Rule.ALLOWED)
             ]
         )
     ]
 
-    machine_list: List[machine.Machine] = client_machines + plug_machines + internal_servers + external_servers + firewalls
+    machine_list: List[Machine] = client_machines + plug_machines + internal_servers + external_servers + firewalls
 
     for i, m in enumerate(machine_list):
 
@@ -85,20 +92,20 @@ def get_machine_list(num_client) -> List[machine.Machine]:
     return machine_list
 
 
-def get_little_environment_profiles(num_client) -> user.EnvironmentProfiles:
+def get_little_environment_profiles(num_client) -> EnvironmentProfiles:
     """Return the environment profiles."""
     profiles = {
-        user.DSI(based_on=['PC', 'Cloud', 'Server']): 1,
-        user.Dev(based_on=['PC', 'Cloud']): num_client - 2
+        DSI(): 1,
+        Dev(): num_client - 2
     }
     machine_list = get_machine_list(num_client)
 
-    return user.EnvironmentProfiles(profiles, machine_list)
+    return EnvironmentProfiles(profiles, machine_list)
     
 
-def get_little_environment_network(num_client) -> network.Network:
+def get_little_environment_network(num_client) -> Network:
     """Return the network."""
     machine_list = get_machine_list(num_client)
 
-    return network.Network(machine_list, name='Little_environment')
+    return Network(machine_list, name='Little_environment')
 
