@@ -102,18 +102,18 @@ class Right:
 class Credential:
     """Credential class."""
 
-    def __init__(self, port: str, machine: str, cred: str) -> None:
+    def __init__(self, port: str, machine: str, profile: str) -> None:
         """Init.
         
         Input:
         port: designates by which port the identifier is operational (str)
         machine: designates on which machine the identifier is operational (str)
-        cred: credential (str).
+        profile: profile usually using the password (str).
         """
         self.port = port
         self.machine = machine
-        self.cred = cred
+        self.profile = profile
     
     def get_description(self) -> Tuple[str, str, str]:
         """Return the port name, machine name and credential."""
-        return (self.port, self.machine, self.cred)
+        return (self.port, self.machine, self.profile)

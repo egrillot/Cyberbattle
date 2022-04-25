@@ -2,28 +2,41 @@
 
 
 from typing import List
-from ...vulnerabilities.outcomes import Escalation, LeakedCredentials, LeakedMachineIP, LateralMove, Reconnaissance
+from ...vulnerabilities.outcomes import LeakedCredentials, LeakedMachineIP, Collection
 from ..utils.user import DSI, Dev, EnvironmentProfiles
 from ..utils.network import Network
-from ..utils.data import CloudService, CloudStorage, Driver, ScheduledJob, Script, Process, File
 from ..utils.flow import Traffic, Rule, UserRight, Credential
 from ..utils.machine import Machine, Firewall, Client, Plug, Cloud, Server
 
 
 client_services = {
-    'sudo': [Script(), Process(), File()]
+    'Dev': {
+        'sudo': ['Script', 'Process', 'File', 'UserAccount']
+    },
+    'DSI': {
+        'sudo': ['Script', 'Process', 'File', 'UserAccount']
+    }
 }
 
 googledrive_services = {
-    "HTTPS": [Driver(), CloudStorage(), CloudService()]
+    'Dev': {
+        'HTTPS': ['Driver', 'UserAccount']
+    },
+    'DSI': {
+        'HTTPS': ['Logon Session', 'Driver', 'CloudStorage', 'CloudService', 'UserAccount']
+    }
 }
 
 servermail_services = {
-    "HTTPS": [CloudStorage(), CloudService()]
+    'DSI': {
+        'HTTPS': ['CloudStorage', 'CloudService', 'UserAccount']
+    }
 }
 
 database_services = {
-    "HTTPS": [CloudStorage(), CloudService(), ScheduledJob()]
+    'DSI': {
+        'HTTPS': ['CloudStorage', 'CloudService', 'UserAccount']
+    }
 }
 
 def get_machine_list(num_client) -> List[Machine]:
@@ -33,9 +46,15 @@ def get_machine_list(num_client) -> List[Machine]:
         Client(instance_name='PC_{}'.format(i+2), platforms=['Windows'], connected_machines=['Switch_1'], value=0, data_sources=client_services)
         for i in range(num_client - 2)
         ] + [
-            Client(instance_name='PC_1', platforms=['Windows'], connected_machines=['Switch_1'], value=0, is_infected=True, data_sources=client_services)
+            Client(instance_name='PC_1', platforms=['Windows'], connected_machines=['Switch_1'], value=0, is_infected=True, data_sources=client_services,
+            outcomes=[
+                LeakedMachineIP(machine_ip=['PC_{}'.format(i+1) for i in range(num_client)])
+            ])
         ] + [
-            Client(instance_name='PC_{}'.format(num_client), platforms=['Windows'], connected_machines=['Switch_1'], value=0, data_sources=client_services)
+            Client(instance_name='PC_{}'.format(num_client), platforms=['Windows'], connected_machines=['Switch_1'], value=0, data_sources=client_services,
+            outcomes=[
+                LeakedCredentials(credentials=[Credential(port='HTTPS', machine='MailServer', profile='DSI')])
+                ])
         ]
 
     plug_machines = [
@@ -45,13 +64,18 @@ def get_machine_list(num_client) -> List[Machine]:
         ]
     
     internal_servers = [
-        Server(instance_name='DatabaseServer', platforms=['IaaS'], connected_machines=['Switch_2'], value=1000, data_sources=database_services),
-        Server(instance_name='MailServer', platforms=['PRE'], connected_machines=['Switch_2'], value=200, data_sources=servermail_services),
-        Server(instance_name='CommunicationServer', platforms=['Pre'], connected_machines=['Switch_2'], value=200, data_sources=servermail_services)
+        Server(instance_name='DatabaseServer', platforms=['IaaS'], connected_machines=['Switch_2'], value=1000, data_sources=database_services,
+        outcomes=[Collection(data='Confidential document', required_right=UserRight.LOCAL_USER, absolute_value=1000)]), 
+        Server(instance_name='MailServer', platforms=['IaaS'], connected_machines=['Switch_2'], value=200, data_sources=servermail_services,
+        outcomes=[LeakedMachineIP(machine_ip=[
+            'DatabaseServer', 'CommunicationServer', 'GoogleDrive'], required_right=UserRight.LOCAL_USER)
+            ]),
+        Server(instance_name='CommunicationServer', platforms=['PRE'], connected_machines=['Switch_2'], value=200, data_sources=servermail_services) 
     ]
 
     external_servers = [
-        Cloud(instance_name='GoogleDrive', platforms=['Google Workspace'], connected_machines=['Firewall_2'], value=500, data_sources=googledrive_services)
+        Cloud(instance_name='GoogleDrive', platforms=['Google Workspace'], connected_machines=['Firewall_2'], value=500, data_sources=googledrive_services,
+        outcomes=[LeakedCredentials(credentials=[Credential(port='HTTPS', machine='DatabaseServer', profile='DSI')])])
     ]
 
     firewalls = [
@@ -108,4 +132,3 @@ def get_little_environment_network(num_client) -> Network:
     machine_list = get_machine_list(num_client)
 
     return Network(machine_list, name='Little_environment')
-

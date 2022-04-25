@@ -4,10 +4,13 @@ import networkx as nx
 from networkx import all_shortest_paths, has_path
 import numpy as np
 import matplotlib.pyplot as plt
+from importlib.resources import open_binary
 
-from typing import List
+from typing import List, Dict
 from PIL import Image
-from .machine import Machine
+from .machine import Machine, get_machines_by_name
+from .data import Data_source
+from .. import images
 
 
 class Network:
@@ -37,9 +40,8 @@ class Network:
 
             ip_adress = machine.get_ip_adress()
             instance_name = machine.get_instance_name()
-            im = Image.open(machine.get_url_image())
             connected_machines = machine.get_connected_machines()
-            self.graph.add_node(instance_name, image=im)
+            self.graph.add_node(instance_name, machine=machine)
             added_machines.add(instance_name)
             
             for m in connected_machines:
@@ -94,7 +96,7 @@ class Network:
         for key, value in zip(pos.keys(), pos_array):
             pos[key] = value + 0.5
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(15, 10))
 
         nx.draw_networkx_edges(
             self.graph,
@@ -116,10 +118,15 @@ class Network:
             xf, yf = tr_figure(pos[n])
             xa, ya = tr_axes((xf, yf))
             a = plt.axes([xa - icon_center, ya - icon_center, icon_size, icon_size])
-            a.imshow(self.graph.nodes[n]["image"])
+            machine = self.graph.nodes[n]["machine"]
+            with open_binary(images, machine.get_url_image()) as image_file:
+                im = Image.open(image_file)
+                a.imshow(im)
 
-            if annotations:
-                a.annotate(n, xy=[xa - icon_center, ya - icon_center])
+                if annotations:
+                    a.annotate(n, xy=[xa - icon_center, ya - icon_center])
+
+            image_file.close()
 
             a.axis("off")
         
@@ -144,4 +151,40 @@ class Network:
     def get_machine_list(self) -> List[Machine]:
         """Return the machine list."""
         return self.machine_list
+    
+    def get_available_datasources(self) -> List[str]:
+        """Return the list of data source available in the network."""
+        data_sources = []
+
+        for m in self.machine_list:
+
+            machine_data_sources = m.get_data_sources().values()
+
+            for ds_list in machine_data_sources:
                 
+                for ds in ds_list.values():
+            
+                    data_sources += ds
+        
+        return list(set(data_sources))
+                
+    def get_services(self) -> List[str]:
+        """Return the list of service running in the network."""
+        services = []
+
+        for m in self.machine_list:
+
+            services += m.get_data_sources().keys()
+        
+        return list(set(services))
+
+    def get_machine_services(self, machine: str) -> Dict[str, str]:
+        """Return the running services of the provided machine with the available data sources."""
+        services = dict()
+
+        machines = get_machines_by_name(machine, self.machine_list) 
+
+        if len(machines) == 0:
+            raise ValueError("No machine in the environment is called {}".format(machine))
+
+        return machines[0].get_data_sources()

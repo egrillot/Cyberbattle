@@ -17,7 +17,7 @@ class Activity:
         source: The name of the machine from which the action originated (str)
         activity: indicates whether or not an activity is taking place (bool), default value is False
         where: the instance name of the machine where the activity takes place (str), default value is None
-        action: the action comitted (str), default value is None
+        action: the data source triggered (str), default value is None
         service: the service the user want to use to perform the activity (str), default value is None.
         Output: None
         """
@@ -70,12 +70,15 @@ class Profile:
         
         Input: 
         name: profile name (str)
-        data_source_distribution: the probability distribution of requesting a data source (Dict[Data_source, float]).
+        data_source_distribution: the probability distribution of triggering a data source (Dict[Data_source, float]).
         Output: None.
         """
-        s = sum(data_source_distribution.values())
+        s = kahansum(np.array(list(data_source_distribution.values())))
         if s > 1 or s < 0:
             raise ValueError('The sum of the given probabilities : {}, is not between 0 and 1.'.format(s))
+        
+        if sum([1 for ds in data_source_distribution.keys() if isinstance(ds, UserAccount)]) < 1:
+            raise ValueError("The profile isn't able to connect itself to machine. Please add a 'User account' data source.")
 
         self.name = name
         self.data_source_distribution = data_source_distribution
@@ -122,7 +125,7 @@ class Profile:
 
             if p <= data_source_distribution[0][1]:
 
-                data_source = data_source_distribution[i][0].get_data_source()
+                data_source = data_source_distribution[0][0].get_data_source()
                 machines = [(m.get_instance_name(), m.get_service_name(data_source)) for m in network_machines if m.is_data_source_available(data_source)]
 
                 if len(machines) == 0:
@@ -168,13 +171,14 @@ class Profile:
 class EnvironmentProfiles:
     """Defines all passiv actors in the environment."""
 
-    def __init__(self, profiles: Dict[(Profile, int)], machines: List[Machine]) -> None:
+    def __init__(self, profiles: Dict[Profile, int], machines: List[Machine]) -> None:
         """Init profiles of passive environmental actors.
         
         Input: 
         profiles: dictionary associating to a given profile type its number of occurrences in the environment (Dict[(str, int)])
         machines: list of running machine isntance name (List[Machine]).
         """
+        self.profiles_dict = profiles
         self.profiles: List[Profile] = []
         self.nb_profile = sum([n for _, n in profiles.items()])
         given_PC_count = 0
@@ -231,6 +235,10 @@ class EnvironmentProfiles:
     def get_profile_count(self) -> int:
         """Return the profile count."""
         return self.nb_profile
+    
+    def get_profiles(self) -> Dict[str, int]:
+        """Return profiles."""
+        return dict([(p.get_name(), n) for p, n in self.profiles_dict.items()])
 
 
 class DSI(Profile):
@@ -239,10 +247,11 @@ class DSI(Profile):
     def __init__(self) -> None:
         name = 'DSI'
         data_source_distribution = {
-            CloudStorage(): 0.4,
+            CloudStorage(): 0.2,
+            LogonSession(): 0.2,
             CloudService(): 0.2,
             Driver(): 0.2,
-            ScheduledJob(): 0.1
+            UserAccount(): 0.1
         }
         super().__init__(name, data_source_distribution)
 
@@ -255,6 +264,7 @@ class Dev(Profile):
         data_source_distribution = {
             Script(): 0.3,
             Process(): 0.2,
-            File(): 0.2
+            File(): 0.1,
+            UserAccount():0.1
         }
         super().__init__(name, data_source_distribution)

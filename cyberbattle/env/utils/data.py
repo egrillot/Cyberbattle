@@ -137,7 +137,7 @@ class CloudService(Data_source):
 
     def __init__(self) -> None:
         """Init the Data_source CloudService."""
-        data_source = 'CloudService'
+        data_source = 'Cloud Service'
         description = 'Infrastructure, platforms, or software that are hosted on-premise or by third-party providers, made available to users through network connections and/or APIs'
         actions = ['Cloud Service Disable', 'Cloud Service Enumeration', 'Cloud Service Metadata', 'Cloud Service Modification', 'Stop']
         initial_distribution = np.array([0.25, 0.25, 0.25, 0.25])
@@ -156,7 +156,7 @@ class CloudStorage(Data_source):
 
     def __init__(self) -> None:
         """Init the Data_source CloudStorage."""
-        data_source = 'CloudStorage'
+        data_source = 'Cloud Storage'
         description = 'Data object storage infrastructure hosted on-premise or by third-party providers, made available to users through network connections and/or APIs'
         actions = ['Cloud Storage Access', 'Cloud Storage Creation', 'Cloud Storage Enumeration', 'Cloud Storage Metadata', 'Cloud Storage Modification', 'Stop']
         initial_distribution = np.array([0.2, 0.2, 0.2, 0.2, 0.2])

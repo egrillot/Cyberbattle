@@ -85,7 +85,7 @@ class Machine:
         """Return outcome list."""
         return self.outcomes
     
-    def get_data_sources(self) -> Dict[str, Data_source]:
+    def get_data_sources(self) -> Dict[str, List[Data_source]]:
         """Return the data sources."""
         return self.service_to_data_sources
     
@@ -122,7 +122,7 @@ class Plug(Machine):
             raise ValueError('A plug must at least link 2 machines instead of {}'.format(len(connected_machines)))
 
         name = 'Plug'
-        url_image = './env/images/Switch.jpg'
+        url_image = 'Switch.jpg'
         super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected, data_sources)
 
 
@@ -142,7 +142,7 @@ class Firewall(Machine):
         self.incomings = incomings
         self.outgoings = outgoings
         name = 'Firewall'
-        url_image = './env/images/Firewall.jpg'
+        url_image = 'Firewall.jpg'
         super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected, data_sources)
     
     def is_passing(self, port_name: str, coming_from: Machine) -> bool:
@@ -174,7 +174,7 @@ class Client(Machine):
     def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init."""
         name = 'PC'
-        url_image = './env/images/PC.png'
+        url_image = 'PC.png'
         super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected, data_sources)
 
 
@@ -184,7 +184,7 @@ class Server(Machine):
     def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init."""
         name = 'Server'
-        url_image = './env/images/Server.png'
+        url_image = 'Server.png'
         super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected, data_sources)
 
 
@@ -194,7 +194,7 @@ class Cloud(Machine):
     def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init."""
         name = 'Cloud'
-        url_image = './env/images/Cloud.jpg'
+        url_image = 'Cloud.jpg'
         super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected, data_sources)
 
 
