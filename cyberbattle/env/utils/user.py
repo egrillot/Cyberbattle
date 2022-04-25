@@ -81,8 +81,13 @@ class Profile:
             raise ValueError("The profile isn't able to connect itself to machine. Please add a 'User account' data source.")
 
         self.name = name
-        self.data_source_distribution = data_source_distribution
         self.no_solicitation_prob = 1 - s
+        self.data_source_distribution: Dict[Data_source, float] = dict()
+        probs = np.cumsum([self.no_solicitation_prob] + list(data_source_distribution.values()))
+
+        for ds, p in zip(data_source_distribution.keys(), probs[1:]):
+
+            self.data_source_distribution[ds] = p
     
     def set_instance_name(self, instance_name: str) -> None:
         """Set instance name."""
@@ -107,15 +112,17 @@ class Profile:
         """Return the profile data source distribution."""
         return self.data_source_distribution
     
-    def on_step(self, p: float, network_machines: List[Machine]) -> Activity:
+    def on_step(self, network_machines: List[Machine]) -> Activity:
         """Return an activity on an environment step with respect to the probability distribution.
         
-        Input: p which correspond to a probability following an uniform law over [0, 1] (float).
+        Input: network_machines (List[Machine]).
         Output: activity (Activity).
         """
+        p = random.random()
+
         if p <= self.no_solicitation_prob:
 
-            return Activity(who=self.PC)
+            return Activity(source=self.PC)
         
         else:
 
@@ -126,7 +133,15 @@ class Profile:
             if p <= data_source_distribution[0][1]:
 
                 data_source = data_source_distribution[0][0].get_data_source()
-                machines = [(m.get_instance_name(), m.get_service_name(data_source)) for m in network_machines if m.is_data_source_available(data_source)]
+                machines = []
+                
+                for m in network_machines:
+                    
+                    can_perform, service = m.execute(self.get_name(), data_source)
+
+                    if can_perform:
+
+                        machines.append((m.get_instance_name(), service))
 
                 if len(machines) == 0:
 
@@ -140,7 +155,7 @@ class Profile:
                         activity=True,
                         action=data_source_distribution[0][0].call(),
                         where=where,
-                        who=self.PC,
+                        source=self.PC,
                         service=service
                         )
 
@@ -153,7 +168,7 @@ class Profile:
 
                     if len(machines) == 0:
 
-                        raise ValueError("The user {} wanted to use the data source {} but no machine in the environment provides this service.".format(self.name, data_source_distribution[i][0].get_data_source()))                 
+                        raise ValueError("The user {} wanted to use the data source {} but no machine in the environment provides this service.".format(self.name, data_source))                 
                     
                     else:
 
@@ -163,9 +178,30 @@ class Profile:
                             activity=True,
                             action=data_source_distribution[i][0].call(),
                             where=where,
-                            who=self.PC,
+                            source=self.PC,
                             service=service
                             )
+            
+            if p >= data_source_distribution[n_data_source - 1][1]:
+
+                data_source = data_source_distribution[n_data_source - 1][0].get_data_source()
+                machines = [(m.get_instance_name(), m.get_service_name(data_source)) for m in network_machines if m.is_data_source_available(data_source)]
+
+                if len(machines) == 0:
+
+                    raise ValueError("The user {} wanted to use the data source {} but no machine in the environment provides this service.".format(self.name, data_source))                 
+                
+                else:
+
+                    where, service = random.choice(machines)
+
+                    return Activity(
+                        activity=True,
+                        action=data_source_distribution[n_data_source - 1][0].call(),
+                        where=where,
+                        source=self.PC,
+                        service=service
+                        )
 
 
 class EnvironmentProfiles:
@@ -175,7 +211,7 @@ class EnvironmentProfiles:
         """Init profiles of passive environmental actors.
         
         Input: 
-        profiles: dictionary associating to a given profile type its number of occurrences in the environment (Dict[(str, int)])
+        profiles: dictionary associating to a given profile type its number of occurrences in the environment (Dict[Profile, int])
         machines: list of running machine isntance name (List[Machine]).
         """
         self.profiles_dict = profiles
@@ -188,33 +224,29 @@ class EnvironmentProfiles:
         if len(total_available_PC) != self.nb_profile:
             raise ValueError('The environment does not have enough PCs for all profiles provided, number of profiles: {}, number of PCs: {}'.format(self.nb_profile, len(total_available_PC)))
 
-        for profile in profiles.keys():
+        for profile, nb_profile in profiles.items():
             
             if not isinstance(profile, Profile):
                 raise ValueError('Undefined profile class: {}'.format(profile))
-
-            nb_profile = profiles[profile]
 
             for j in range(nb_profile):
 
                 p = profile.__class__()
                 p.set_instance_name(profile.get_name() + '_' + str(j+1))
-                p.set_PC('PC_' + str(given_PC_count))
+                p.set_PC(total_available_PC[given_PC_count])
                 self.profiles.append(p)
                 given_PC_count += 1
     
     def on_step(self) -> List[Activity]:
         """Return an array of activities.
         
-        Output: Activities which is an array of shape (self.nb_passive_actors,) where each element corresponds to the activity of the profile associated with the index (ndarray[Activity]).
+        Output: Activities which is a list of length self.nb_passive_actors where each element corresponds to the activity of the profile associated with the index (ndarray[Activity]).
         """
         output = []
 
-        p = random.random()
-
         for i in range(self.nb_profile):
-
-            output.append(self.profiles[i].on_step(p, self.network_machines))
+            
+            output.append(self.profiles[i].on_step(self.network_machines))
         
         return output
 
@@ -228,7 +260,7 @@ class EnvironmentProfiles:
 
             for data_source in data_sources.keys():
 
-                res += [f'{data_source.get_data_source()}: {a}' for a in data_source.get_actions()]
+                res += data_source.get_actions()
         
         return list(set(res))
     

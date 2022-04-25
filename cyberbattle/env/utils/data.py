@@ -64,7 +64,7 @@ class Data_source:
         
         self.last_call = action
 
-        return action
+        return '{}: {}'.format(self.data_source, action) if action != 'Stop' else 'Stop'
     
     def get_hash_encoding(self) -> int:
         """Return the hash encoding of the data source name."""
@@ -76,7 +76,7 @@ class Data_source:
     
     def get_actions(self) -> List[str]:
         """Return the actions applicable to the data source."""
-        return self.initial_actions
+        return ['{}: {}'.format(self.data_source, action) for action in self.initial_actions if action != 'Stop'] + ['Stop']
 
 class ActiveDirectory(Data_source):
     """ActiveDirectory class."""

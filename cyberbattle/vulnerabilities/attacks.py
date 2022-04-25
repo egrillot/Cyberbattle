@@ -74,14 +74,13 @@ class Attack:
         Output: None.
         """
         self.requirements = dict()
-        right = UserRight.LOCAL_USER
         if 'x_mitre_permissions_required' in raw_dictionnary_attack:
 
-            for permissions in raw_dictionnary_attack['x_mitre_permissions_required']:
+            self.requirements['right'] = min([rights_link[permission] for permission in raw_dictionnary_attack['x_mitre_permissions_required']])
 
-                right = max(rights_link[permissions], right)
-        
-            self.requirements['right'] = right
+        else:
+
+            self.requirements['right'] = UserRight.NO_ACCESS
 
         if 'x_mitre_platforms' in raw_dictionnary_attack:
             
@@ -137,19 +136,24 @@ class Attack:
         Output: None.
         """
         self.type = None
+        if 'x_mitre_permissions_required' in raw_dictionnary_attack:
+            if max(rights_link[right] for right in raw_dictionnary_attack['x_mitre_permissions_required']) > UserRight.LOCAL_USER:
+                self.type = ActionType.LOCAL
+            else:
+                self.type = ActionType.REMOTE
+        
+        else:
+            self.type = ActionType.REMOTE
+    
         if 'x_mitre_remote_support' in raw_dictionnary_attack:
             if raw_dictionnary_attack['x_mitre_remote_support']:
                 self.type = ActionType.REMOTE
             else:
                 self.type = ActionType.LOCAL
-        
+ 
         if not self.type:
-
-            if 'x_mitre_permissions_required' in raw_dictionnary_attack:
-                if max(rights_link[right] for right in raw_dictionnary_attack['x_mitre_permissions_required']) > UserRight.LOCAL_USER:
-                    self.type = ActionType.LOCAL
-                else:
-                    self.type = ActionType.REMOTE
+       
+            self.type = ActionType.LOCAL
     
     def get_type(self) -> ActionType:
         """Return action type."""
@@ -209,7 +213,7 @@ class Attack:
 def pass_filter(
     attack: Dict[str, List[str]],
     platforms_outcomes_couple_per_machine: Dict[str, Tuple[List[str], List[Tuple[str, UserRight]]]]
-    ) -> Tuple[bool, List[str], Dict[str, List[Tuple[bool, str]]]]:
+    ) -> Tuple[bool, List[str], Dict[str, List[Tuple[bool, str, UserRight]]]]:
     """Return whether the attack can be executed on a machine in the environment and if so which one.
 
     Input: 
@@ -239,22 +243,8 @@ def pass_filter(
  
                             if phase_name in outcomes:
 
-                                assert1 = False
-                                assert2 = False
-
-                                if 'x_mitre_permissions_required' in attack:
-
-                                    assert1 = ( userright is not None ) and ( sum([1 for u in attack['x_mitre_permissions_required'] if rights_link[u].value == userright.value]) > 0 )
-                                    assert2 = ( userright is None ) and ( len(attack['x_mitre_permissions_required']) == 0 )
-                                
-                                else :
-                                    
-                                    assert2 = userright is None 
-
-                                if assert1 or assert2:
-                                    
-                                    instance_names.append(instance_name)
-                                    matched_outcome_count[instance_name][i] = (True, phase_name)
+                                instance_names.append(instance_name)
+                                matched_outcome_count[instance_name][i] = (True, phase_name, userright)
 
     if len(instance_names) != 0:
 
@@ -322,8 +312,26 @@ class AttackSet:
                             
                             if match[0]:
 
-                                attack.modify_outcomes(new_outcome=[match[1]])
-                                attacks_by_machines[instance_name][i].append(attack)
+                                required_right = match[2]
+                                attack_kept = False
+                                attack_type = attack.get_type()
+
+                                if required_right is not None:
+
+                                    if attack_type == ActionType.LOCAL:
+
+                                        attack_kept = True
+
+                                else:
+                                    
+                                    if attack_type == ActionType.REMOTE:
+
+                                        attack_kept = True
+
+                                if attack_kept:
+                                    
+                                    attack.modify_outcomes(new_outcome=[match[1]])
+                                    attacks_by_machines[instance_name][i].append(attack)
         
         for instance_name, attacks_per_outcomes in attacks_by_machines.items():
 
@@ -366,5 +374,6 @@ class AttackSet:
         """Return the attack description associated to each machines."""
         return {machine: {attack.get_name(): {
             "data sources triggered": attack.get_data_sources()[0], 
-            "phase name": attack.get_outcomes()[0]
+            "phase name": attack.get_outcomes()[0],
+            "Type": "Remote" if attack.get_type() == ActionType.REMOTE else "Local"
          } for attack in attacks} for machine, attacks in self.attacks.items()}

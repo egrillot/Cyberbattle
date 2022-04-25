@@ -19,7 +19,7 @@ class Machine:
         outcomes: List[Outcome]=[],
         value: int=0,
         is_infected: bool=False,
-        data_sources: Dict[str, List[Data_source]]=dict()
+        data_sources: Dict[str, Dict[str, List[Data_source]]]=dict()
     ):
         """Init.
         
@@ -33,14 +33,14 @@ class Machine:
         outcomes: list of possible results of attacks that the attacker can carry out on the machine (List[Outcome])
         value: integer defining the machine importance in the network (int)
         is_infected: if True, it means that the attacker is connected as a local user on the machine at the simulation start (bool)
-        data_sources: dictionary of services offered by the machine linked to accessible data sources (Dict[str, List[Data_source]]).
+        data_sources: dictionary of services offered by the machine linked to accessible data sources for each profile (Dict[str, Dict[str, List[Data_source]]]).
         """
         self.ip_adress = None
         self.outcomes = outcomes
         self.name = name
         self.instance_name = instance_name
         self.platforms = platforms
-        self.connected_machines = set(connected_machines)
+        self.connected_machines = list(set(connected_machines))
         self.url_image = url_image
         self.value = value
         self.is_infected = is_infected
@@ -85,19 +85,19 @@ class Machine:
         """Return outcome list."""
         return self.outcomes
     
-    def get_data_sources(self) -> Dict[str, List[Data_source]]:
+    def get_data_sources(self) -> Dict[str, Dict[str, List[Data_source]]]:
         """Return the data sources."""
         return self.service_to_data_sources
     
     def is_data_source_available(self, data_source: str) -> bool:
         """Return if the data_source is available or not."""
-        data_sources = self.service_to_data_sources.values()
+        for data_sources_per_service in self.service_to_data_sources.values():
 
-        for ds in data_sources:
+            for data_sources in data_sources_per_service.values():
 
-            if data_source in ds:
+                if data_source in data_sources:
 
-                return True
+                    return True
         
         return False
     
@@ -106,16 +106,32 @@ class Machine:
         if not self.is_data_source_available(data_source):
             raise ValueError("The provided data source {} is not available on this machine.".format(data_source))
         
-        for service, data_sources in self.service_to_data_sources.items():
+        for data_sources_per_service in self.service_to_data_sources.values():
 
-            if data_source in data_sources:
+            for service, data_sources in data_sources_per_service.items():
 
-                return service
+                if data_source in data_sources:
+
+                    return service
+    
+    def execute(self, profile: str, data_source: str) -> Tuple[bool, str]:
+        """Return whether the profile can be retrieved by triggering the source data or not and if he can, it returns also by which port the service is provided."""
+        if self.is_data_source_available(data_source):
+
+            if profile in self.service_to_data_sources:
+
+                for port, data_sources in self.service_to_data_sources[profile].items():
+
+                    if data_source in data_sources:
+
+                        return True, port
+        
+        return False, None
 
 class Plug(Machine):
     """Connector for linking several machines."""
 
-    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
+    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[str], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init the connected machine to the plug."""
 
         if len(connected_machines) <= 1:
@@ -129,7 +145,7 @@ class Plug(Machine):
 class Firewall(Machine):
     """Firewall class."""
 
-    def __init__(self, incomings: List[Traffic], outgoings: List[Traffic], instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
+    def __init__(self, incomings: List[Traffic], outgoings: List[Traffic], instance_name: str, platforms: List[str], connected_machines: List[str], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init incoming and outgoing traffic rules.
         
         Inputs:
@@ -156,7 +172,7 @@ class Firewall(Machine):
         instance_name = coming_from.get_instance_name()
         if instance_name not in [m for m in self.connected_machines]:
             raise ValueError("The firewall {} isn't connecting provided machine: {}".format(self.instance_name, instance_name))
-        
+
         traffic_rules = self.outgoings if instance_name == self.connected_machines[0] else self.incomings
 
         for traffic in traffic_rules:
@@ -171,7 +187,7 @@ class Firewall(Machine):
 class Client(Machine):
     """Client class."""
 
-    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
+    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[str], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init."""
         name = 'PC'
         url_image = 'PC.png'
@@ -181,7 +197,7 @@ class Client(Machine):
 class Server(Machine):
     """Server class."""
 
-    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
+    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[str], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init."""
         name = 'Server'
         url_image = 'Server.png'
@@ -191,7 +207,7 @@ class Server(Machine):
 class Cloud(Machine):
     """Clourd class (external servers)."""
 
-    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[int], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
+    def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[str], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init."""
         name = 'Cloud'
         url_image = 'Cloud.jpg'

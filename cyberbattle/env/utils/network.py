@@ -9,7 +9,6 @@ from importlib.resources import open_binary
 from typing import List, Dict
 from PIL import Image
 from .machine import Machine, get_machines_by_name
-from .data import Data_source
 from .. import images
 
 
@@ -174,14 +173,14 @@ class Network:
 
         for m in self.machine_list:
 
-            services += m.get_data_sources().keys()
+            for profile in m.get_data_sources().values():
+
+                    services += profile.keys()
         
         return list(set(services))
 
     def get_machine_services(self, machine: str) -> Dict[str, str]:
         """Return the running services of the provided machine with the available data sources."""
-        services = dict()
-
         machines = get_machines_by_name(machine, self.machine_list) 
 
         if len(machines) == 0:

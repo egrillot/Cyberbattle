@@ -23,6 +23,9 @@ class Outcome:
     def get_required_right(self) -> Right:
         """Return the required right."""
         return self.required_right
+    
+    def get(self) -> None:
+        raise NotImplementedError
 
 
 class LeakedCredentials(Outcome):
@@ -36,7 +39,7 @@ class LeakedCredentials(Outcome):
     
     def get(self) -> List[Credential]:
         """Return credential list."""
-        return self.credentials
+        return [cred.get_description() for cred in self.credentials]
 
 
 class Escalation(Outcome):
@@ -74,6 +77,10 @@ class LateralMove(Outcome):
         """Init."""
         phase_name = "lateral-movement"
         super().__init__(phase_name, absolute_value, required_right)
+    
+    def get(self) -> str:
+        """Return nothing."""
+        return self.phase_name
 
 
 class Reconnaissance(Outcome):

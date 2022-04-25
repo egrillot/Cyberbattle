@@ -11,31 +11,31 @@ from ..utils.machine import Machine, Firewall, Client, Plug, Cloud, Server
 
 client_services = {
     'Dev': {
-        'sudo': ['Script', 'Process', 'File', 'UserAccount']
+        'sudo': ['Script', 'Process', 'File', 'User Account']
     },
     'DSI': {
-        'sudo': ['Script', 'Process', 'File', 'UserAccount']
+        'sudo': ['Script', 'Process', 'File', 'User Account']
     }
 }
 
 googledrive_services = {
     'Dev': {
-        'HTTPS': ['Driver', 'UserAccount']
+        'HTTPS': ['Driver', 'User Account']
     },
     'DSI': {
-        'HTTPS': ['Logon Session', 'Driver', 'CloudStorage', 'CloudService', 'UserAccount']
+        'HTTPS': ['Logon Session', 'Driver', 'Cloud Storage', 'Cloud Service', 'User Account']
     }
 }
 
 servermail_services = {
     'DSI': {
-        'HTTPS': ['CloudStorage', 'CloudService', 'UserAccount']
+        'HTTPS': ['Cloud Storage', 'Cloud Service', 'User Account']
     }
 }
 
 database_services = {
     'DSI': {
-        'HTTPS': ['CloudStorage', 'CloudService', 'UserAccount']
+        'HTTPS': ['Cloud Storage', 'Cloud Service', 'User Account']
     }
 }
 
@@ -64,7 +64,7 @@ def get_machine_list(num_client) -> List[Machine]:
         ]
     
     internal_servers = [
-        Server(instance_name='DatabaseServer', platforms=['IaaS'], connected_machines=['Switch_2'], value=1000, data_sources=database_services,
+        Server(instance_name='DatabaseServer', platforms=['Linux'], connected_machines=['Switch_2'], value=1000, data_sources=database_services,
         outcomes=[Collection(data='Confidential document', required_right=UserRight.LOCAL_USER, absolute_value=1000)]), 
         Server(instance_name='MailServer', platforms=['IaaS'], connected_machines=['Switch_2'], value=200, data_sources=servermail_services,
         outcomes=[LeakedMachineIP(machine_ip=[
@@ -119,8 +119,8 @@ def get_machine_list(num_client) -> List[Machine]:
 def get_little_environment_profiles(num_client) -> EnvironmentProfiles:
     """Return the environment profiles."""
     profiles = {
-        DSI(): 1,
-        Dev(): num_client - 2
+        Dev(): num_client - 2,        
+        DSI(): 1
     }
     machine_list = get_machine_list(num_client)
 
