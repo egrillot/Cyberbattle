@@ -1,8 +1,10 @@
 """This file is used to test the different networks in the baseline and the functions/objects in the env directory."""
 
+from typing import List
 from ..vulnerabilities.attacks import AttackSet
 from .samples import little_network
 from .utils.data import Data_source
+from .utils.machine import Machine
 
 num_client = 4
 
@@ -10,7 +12,7 @@ def test_little_environment_init():
 
     net = little_network.get_little_environment_network(num_client)
     #net.display(annotations=True)
-    paths = net.get_paths()
+    paths: List[Machine] = net.get_paths()
 
     instance_name_to_index = net.instance_name_to_index
     instance_name_to_machine = net.instance_name_to_machine
@@ -34,6 +36,15 @@ def test_little_environment_init():
     assert len(switch_2.get_connected_machines()) > 1
     assert len(firewall_1.get_connected_machines()) == 2
     assert len(firewall_2.get_connected_machines()) == 2
+    assert set(net.get_services()) == set(['HTTPS', 'sudo'])
+    assert set(net.get_available_datasources()) == set(['User Account',
+                                                        'Logon Session',
+                                                        'File',
+                                                        'Script',
+                                                        'Cloud Service',
+                                                        'Process',
+                                                        'Driver',
+                                                        'Cloud Storage'])
 
 def test_data_sources():
 
@@ -54,15 +65,3 @@ def test_little_environment_profiles_init():
 
     assert len(activities) == num_client - 1
 
-def test_attacks_on_little_environment():
-
-    machine_list = little_network.get_machine_list(num_client)
-    env_profiles = little_network.get_little_environment_profiles(num_client)
-    #attacks = AttackSet(machine_list, env_profiles, action_complexity=0)
-    #attack_count = attacks.get_attack_count()
-    #data_sources_attacker = attacks.get_data_sources()
-    #data_sources_profiles = env_profiles.get_available_actions()
-    #attacks_list = attacks.get_attacks()
-
-    #assert len(set(data_sources_attacker).union(data_sources_profiles)) <= len(data_sources_profiles)
-    #assert attack_count == len(attacks_list)

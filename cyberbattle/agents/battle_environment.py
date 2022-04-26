@@ -70,6 +70,10 @@ class CyberBattleEnv(gym.Env):
         """Return the number of attack that the attacker can performed in the environment."""
         return self.attack_count
     
+    def get_profile_count(self) -> int:
+        """Return the number of profile triggering data source on the environment."""
+        return self.__profile_count
+    
     def step(self, display_Siem=False): #à terminer
         """Run a step time during the simulation."""
         attacker_activity = Activity(source='PC_1')

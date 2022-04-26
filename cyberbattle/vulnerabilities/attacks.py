@@ -370,7 +370,7 @@ class AttackSet:
         """Return the attack list."""
         return self.all_attacks
 
-    def get_attacks_by_machines_string(self) -> Dict[str, List[Attack]]:
+    def get_attacks_by_machines_string(self) -> Dict[str, Dict[str, Dict[str, str]]]:
         """Return the attack description associated to each machines."""
         return {machine: {attack.get_name(): {
             "data sources triggered": attack.get_data_sources()[0], 
