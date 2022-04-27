@@ -1,2 +1,4 @@
-selenium
-webdriver-manager
+numpy
+pandas
+matplotlib
+gym
