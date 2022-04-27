@@ -59,8 +59,8 @@ class CyberBattleEnv(gym.Env):
     
     def reset(self) -> None:
         """Reset the environment."""
-        self.__network = self.__network
-        self.__profiles = self.__profiles
+        self.__network.reset()
+        self.__profiles.reset()
         self.__step_count = 0
         self.__done = False
         self.__start_time = time.time()
