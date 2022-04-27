@@ -5,6 +5,7 @@ from typing import Dict
 
 import gym
 import numpy as np
+import time
 
 from ..env.utils.network import Network
 from ..env.utils.user import EnvironmentProfiles, Profile, Activity
@@ -29,9 +30,10 @@ class CyberBattleEnv(gym.Env):
         max_attack_per_outcome: max attack remained number per outcome (int)."""
         super().__init__()
 
-        machine_list = network.get_machine_list()
-        env_profiles = EnvironmentProfiles(profiles, machine_list)
-        attacks = AttackSet(machine_list, env_profiles, max_attack_per_outcome)
+        self.__machine_list = network.get_machine_list()
+        self.instance_name_to_machine = {m.get_instance_name(): m for m in self.__machine_list}
+        env_profiles = EnvironmentProfiles(profiles, self.__machine_list)
+        attacks = AttackSet(self.__machine_list, env_profiles, max_attack_per_outcome)
         self.__network = network
         self.__profiles = env_profiles
         self.attacks = attacks
@@ -57,10 +59,11 @@ class CyberBattleEnv(gym.Env):
     
     def reset(self) -> None:
         """Reset the environment."""
-        self.__network = deepcopy(self.__network)
-        self.__profiles = deepcopy(self.__profiles)
+        self.__network = self.__network
+        self.__profiles = self.__profiles
         self.__step_count = 0
         self.__done = False
+        self.__start_time = time.time()
 
     def get_action_count(self) -> int:
         """Return the number of action that profiles can performed in the environment."""
@@ -77,9 +80,12 @@ class CyberBattleEnv(gym.Env):
     def step(self, display_Siem=False): #à terminer
         """Run a step time during the simulation."""
         attacker_activity = Activity(source='PC_1')
-        activity_matrix = self.SiemBox.on_step(self.step_count, attacker_activity, display_Siem)
+        activity_matrix = self.SiemBox.on_step(self.step_count, attacker_activity, self.__start_time, display_Siem)
 
         self.step_count += 1
 
         return activity_matrix
-        
+    
+    def display_history(self, machine_instance_name: str, service: str) -> None:
+        """Display the incoming traffic on the provided machine instance name by the given service."""
+        self.instance_name_to_machine[machine_instance_name].display_incoming_history(service)

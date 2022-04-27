@@ -77,6 +77,10 @@ class Data_source:
     def get_actions(self) -> List[str]:
         """Return the actions applicable to the data source."""
         return ['{}: {}'.format(self.data_source, action) for action in self.initial_actions if action != 'Stop'] + ['Stop']
+    
+    def reset(self) -> None:
+        """Reset the Markov process."""
+        self.last_call = 'Stop'
 
 class ActiveDirectory(Data_source):
     """ActiveDirectory class."""
@@ -88,11 +92,11 @@ class ActiveDirectory(Data_source):
         actions = ['Active Directory Credential Request', 'Active Directory Object Access', 'Active Directory Object Creation', 'Active Directory Object Deletion', 'Active Directory Object Modification', 'Stop']
         initial_distribution = np.array([0.12, 0.22, 0.22, 0.22, 0.22])
         transition_matrix = np.array([
-            [0.02, 0.2, 0.09, 0.09, 0.2, 0.4],
-            [0.02, 0.08, 0.1, 0.1, 0.2, 0.5],
-            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
-            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
-            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         ])
         
@@ -161,11 +165,11 @@ class CloudStorage(Data_source):
         actions = ['Cloud Storage Access', 'Cloud Storage Creation', 'Cloud Storage Enumeration', 'Cloud Storage Metadata', 'Cloud Storage Modification', 'Stop']
         initial_distribution = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
         transition_matrix = np.array([
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.5],
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.5],
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.5],
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.5],
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.5],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         ])
         super().__init__(data_source, description, actions, initial_distribution, transition_matrix)
@@ -248,11 +252,11 @@ class Drive(Data_source):
         data_source = 'Drive'
         description = 'A non-volatile data storage device (hard drive, floppy disk, USB flash drive) with at least one formatted partition, typically mounted to the file system and/or assigned a drive letter'
         actions = ['Drive Access', 'Drive Creation', 'Drive Modifcation', 'Stop']
-        initial_distribution = np.array([0.3, 0.3, 0.4])
+        initial_distribution = np.array([0.4, 0.3, 0.3])
         transition_matrix = np.array([
-            [0.25, 0.25, 0.25, 0.25],
-            [0.25, 0.25, 0.25, 0.25],
-            [0.25, 0.25, 0.25, 0.25],
+            [0.33, 0.33, 0.33, 0.01],
+            [0.33, 0.33, 0.33, 0.01],
+            [0.33, 0.33, 0.33, 0.01],
             [0.0, 0.0, 0.0, 1.0],
         ])
         super().__init__(data_source, description, actions, initial_distribution, transition_matrix)
@@ -268,8 +272,8 @@ class Driver(Data_source):
         actions = ['Driver Load', 'Driver Metadata', 'Stop']
         initial_distribution = np.array([0.5, 0.5])
         transition_matrix = np.array([
-            [0.3, 0.3, 0.4],
-            [0.3, 0.3, 0.4],
+            [0.4, 0.5, 0.1],
+            [0.4, 0.5, 0.1],
             [0.0, 0.0, 1.0]
         ])
         super().__init__(data_source, description, actions, initial_distribution, transition_matrix)
@@ -283,13 +287,13 @@ class File(Data_source):
         data_source = 'File'
         description = 'A computer resource object, managed by the I/O system, for storing data (such as images, text, videos, computer programs, or any wide variety of other media)'
         actions = ['File Accesss', 'File Creation', 'File Deletion', 'File Metadata', 'File Modification', 'Stop']
-        initial_distribution = np.array([0.12, 0.22, 0.22, 0.22, 0.22])
+        initial_distribution = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
         transition_matrix = np.array([
-            [0.02, 0.2, 0.09, 0.09, 0.2, 0.4],
-            [0.02, 0.08, 0.1, 0.1, 0.2, 0.5],
-            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
-            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
-            [0.04, 0.04, 0.02, 0.2, 0.2, 0.5],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
+            [0.2, 0.2, 0.2, 0.19, 0.2, 0.01],
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         ])
         
@@ -434,8 +438,8 @@ class LogonSession(Data_source):
         actions = ['Logon Session Creation', 'Logon Session Metadata', 'Stop']
         initial_distribution = np.array([0.5, 0.5])
         transition_matrix = np.array([
-            [0.3, 0.3, 0.4],
-            [0.3, 0.3, 0.4],
+            [0.4, 0.5, 0.1],
+            [0.4, 0.5, 0.1],
             [0.0, 0.0, 1.0]
         ])
         super().__init__(data_source, description, actions, initial_distribution, transition_matrix)
@@ -569,12 +573,12 @@ class Process(Data_source):
         actions = ['OS API Execution', 'Process Access', 'Process Creation', 'Process Metadata', 'Process Modification', 'Process Termination', 'Stop']
         initial_distribution = np.array([0.15, 0.15, 0.15, 0.15, 0.15, 0.25])
         transition_matrix = np.array([
-            [0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.1],
-            [0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.1],
-            [0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.1],
-            [0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.1],
-            [0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.1],
-            [0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.1],
+            [0.2, 0.1, 0.1, 0.2, 0.2, 0.19, 0.01],
+            [0.2, 0.1, 0.1, 0.2, 0.2, 0.19, 0.01],
+            [0.2, 0.1, 0.1, 0.2, 0.2, 0.19, 0.01],
+            [0.2, 0.1, 0.1, 0.2, 0.2, 0.19, 0.01],
+            [0.2, 0.1, 0.1, 0.2, 0.2, 0.19, 0.01],
+            [0.2, 0.1, 0.1, 0.2, 0.2, 0.19, 0.01],
             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         ])
         super().__init__(data_source, description, actions, initial_distribution, transition_matrix)
@@ -608,7 +612,7 @@ class Script(Data_source):
         actions = ['Script Execution', 'Stop']
         initial_distribution = np.array([1.])
         transition_matrix = np.array([
-            [0.5, 0.5],
+            [0.9, 0.1],
             [0.0, 1.0]
         ])
         super().__init__(data_source, description, actions, initial_distribution, transition_matrix)

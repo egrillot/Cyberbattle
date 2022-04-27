@@ -170,13 +170,10 @@ class Network:
     def get_services(self) -> List[str]:
         """Return the list of service running in the network."""
         services = []
-
         for m in self.machine_list:
 
-            for profile in m.get_data_sources().values():
+            services += m.get_services()
 
-                    services += profile.keys()
-        
         return list(set(services))
 
     def get_machine_services(self, machine: str) -> Dict[str, str]:
@@ -187,3 +184,9 @@ class Network:
             raise ValueError("No machine in the environment is called {}".format(machine))
 
         return machines[0].get_data_sources()
+    
+    def reset(self) -> None:
+        """Reset the network machines."""
+        for m in self.machine_list:
+
+            m.reset()

@@ -28,6 +28,9 @@ googledrive_services = {
 }
 
 servermail_services = {
+    'Dev': {
+        'HTTPS': ['User Account']
+    },
     'DSI': {
         'HTTPS': ['Cloud Storage', 'Cloud Service', 'User Account']
     }

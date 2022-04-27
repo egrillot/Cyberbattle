@@ -2,6 +2,11 @@
 
 
 from typing import List, Dict, Tuple
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from copy import deepcopy
 from .data import Data_source
 from ...vulnerabilities.outcomes import Outcome
 from .flow import Traffic, Rule
@@ -19,7 +24,7 @@ class Machine:
         outcomes: List[Outcome]=[],
         value: int=0,
         is_infected: bool=False,
-        data_sources: Dict[str, Dict[str, List[Data_source]]]=dict()
+        data_sources: Dict[str, Dict[str, List[str]]]=dict()
     ):
         """Init.
         
@@ -33,7 +38,7 @@ class Machine:
         outcomes: list of possible results of attacks that the attacker can carry out on the machine (List[Outcome])
         value: integer defining the machine importance in the network (int)
         is_infected: if True, it means that the attacker is connected as a local user on the machine at the simulation start (bool)
-        data_sources: dictionary of services offered by the machine linked to accessible data sources for each profile (Dict[str, Dict[str, List[Data_source]]]).
+        data_sources: dictionary of services offered by the machine linked to accessible data sources for each profile (Dict[str, Dict[str, List[str]]]).
         """
         self.ip_adress = None
         self.outcomes = outcomes
@@ -44,7 +49,20 @@ class Machine:
         self.url_image = url_image
         self.value = value
         self.is_infected = is_infected
+        self.__is_infected = deepcopy(is_infected)
         self.service_to_data_sources = data_sources
+        self.incoming_history: Dict[str, Tuple[list[float], list[str]]] = {s: ([], []) for s in self.get_services()}
+    
+    def get_services(self) -> List[str]:
+        """Return running services."""
+        services = []
+        for service_to_datas in self.service_to_data_sources.values():
+
+            for port in service_to_datas.keys():
+
+                services.append(port)
+        
+        return list(set(services))
     
     def set_ip_adress(self, ip_adress: int) -> None:
         """Set ip adress."""
@@ -85,7 +103,7 @@ class Machine:
         """Return outcome list."""
         return self.outcomes
     
-    def get_data_sources(self) -> Dict[str, Dict[str, List[Data_source]]]:
+    def get_data_sources(self) -> Dict[str, Dict[str, List[str]]]:
         """Return the data sources."""
         return self.service_to_data_sources
     
@@ -127,6 +145,65 @@ class Machine:
                         return True, port
         
         return False, None
+
+    def get_available_datasources_profile(self, profile: str) -> List[str]:
+        """Return available data sources for the provided profile name."""
+        profile_data_sources = []
+        if profile in self.service_to_data_sources:
+
+            for data_sources in self.service_to_data_sources[profile].values():
+
+                profile_data_sources += data_sources
+        
+        return list(set(profile_data_sources))
+    
+    def update_incoming_history(self, time: float, instance_name: str, service: str) -> None:
+        """Update incoming traffic history."""
+        self.incoming_history[service][0].append(time)
+        self.incoming_history[service][1].append(instance_name)
+    
+    def display_incoming_history(self, service: str, cluster_time: float=0.05) -> None:
+        """Display the incoming traffic history."""
+        if service not in self.incoming_history:
+            raise ValueError(f"The service {service} isn't running on this machine.")
+
+        times = self.incoming_history[service][0]
+        sources = self.incoming_history[service][1]
+
+        nb_cluster = int(times[-1] / cluster_time) + 1
+
+        final_dict: Dict[str, List[int]] = {source: [0 for _ in range(nb_cluster)] for source in np.unique(sources)}
+        end_time = cluster_time
+        cluster = 0
+
+        for t, s in zip(times, sources):
+
+            if t <= end_time:
+
+                final_dict[s][cluster] += 1
+            
+            else:
+
+                end_time += cluster_time
+                cluster += 1
+                final_dict[s][cluster] += 1
+        
+        new_time = [(t + 0.5) * cluster_time for t in range(nb_cluster)]
+
+        df = pd.DataFrame(final_dict)
+        df['Time'] = new_time
+        df = df.set_index('Time', drop=True)
+        df.plot(figsize=(15, 4), title=f"Origin of traffic entering machine '{self.instance_name}' through the {service} port")
+        plt.xlabel('Time')
+        plt.ylabel('Connexion number')
+        plt.legend()
+        plt.show()
+    
+    def reset(self) -> None:
+        """Reset the machine."""
+        self.is_infected = deepcopy(self.__is_infected)
+        self.incoming_history = {s: ([], []) for s in self.get_services()}
+
 
 class Plug(Machine):
     """Connector for linking several machines."""
@@ -205,7 +282,7 @@ class Server(Machine):
 
 
 class Cloud(Machine):
-    """Clourd class (external servers)."""
+    """Cloud class (external servers)."""
 
     def __init__(self, instance_name: str, platforms: List[str], connected_machines: List[str], outcomes: List[Outcome]=[], value: int=0, is_infected: bool=False, data_sources: Dict[str, List[Data_source]]=dict()):
         """Init."""
