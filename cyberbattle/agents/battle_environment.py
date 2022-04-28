@@ -1,7 +1,6 @@
 """This file provides the CyberBattleEnv class, heir to gym.Env, which allows you to run a simulation in the cyberbattle environment."""
 
-from copy import deepcopy
-from typing import Dict
+from typing import Dict, List
 
 import gym
 import numpy as np
@@ -9,7 +8,7 @@ import time
 
 from ..env.utils.network import Network
 from ..env.utils.user import EnvironmentProfiles, Profile, Activity
-from ..vulnerabilities.attacks import AttackSet
+from ..vulnerabilities.attacks import AttackSet, Attack
 from .defender.tools import SiemBox
 
 
@@ -20,6 +19,7 @@ class CyberBattleEnv(gym.Env):
         self,
         network: Network,
         profiles: Dict[Profile, int],
+        n_iteration: int,
         max_attack_per_outcome: int=1
     ) -> None:
         """Init.
@@ -27,9 +27,11 @@ class CyberBattleEnv(gym.Env):
         Input:
         network: the structure of the environment (Network)
         profiles: passive actors in the environment (Dict[Profile, int])
+        n_iteration: max number of step during the simulation (int)
         max_attack_per_outcome: max attack remained number per outcome (int)."""
         super().__init__()
 
+        self.__n_iteration = n_iteration
         self.__machine_list = network.get_machine_list()
         self.instance_name_to_machine = {m.get_instance_name(): m for m in self.__machine_list}
         env_profiles = EnvironmentProfiles(profiles, self.__machine_list)
@@ -41,7 +43,8 @@ class CyberBattleEnv(gym.Env):
         self.__profile_count = env_profiles.get_profile_count()
         self.services = network.get_services()
 
-        self.id_to_attack = {a.get_id(): a for a in self.attacks.get_attacks()}
+        self.id_to_attack: Dict[int, Attack] = {a.get_id(): a for a in self.attacks.get_attacks()}
+        self.attacks_by_machine: Dict[str, List[Attack]] = attacks.get_attacks_by_machines()
 
         data_sources_attacker = attacks.get_data_sources()
         data_sources_profiles = env_profiles.get_available_actions()
@@ -55,12 +58,13 @@ class CyberBattleEnv(gym.Env):
 
         self.SiemBox = SiemBox(env_profiles, network, self.actions_to_id, self.service_to_id)
 
-        self.step_count = 0
+        self.reset()
     
     def reset(self) -> None:
         """Reset the environment."""
         self.__network.reset()
         self.__profiles.reset()
+        self.__profiles.generate_profile_sequences(self.__n_iteration)
         self.__step_count = 0
         self.__done = False
         self.__start_time = time.time()
@@ -76,13 +80,21 @@ class CyberBattleEnv(gym.Env):
     def get_profile_count(self) -> int:
         """Return the number of profile triggering data source on the environment."""
         return self.__profile_count
+
+    def get_step_count(self) -> int:
+        """Return the current step number."""
+        return self.__step_count
     
+    def is_done(self) -> bool:
+        """Return if the simulation is done or not."""
+        return self.__done or self.__step_count == self.__n_iteration - 1
+
     def step(self, display_Siem=False): #à terminer
         """Run a step time during the simulation."""
         attacker_activity = Activity(source='PC_1')
-        activity_matrix = self.SiemBox.on_step(self.step_count, attacker_activity, self.__start_time, display_Siem)
+        activity_matrix = self.SiemBox.on_step(self.__network, self.__step_count, attacker_activity, self.__start_time, display_Siem)
 
-        self.step_count += 1
+        self.__step_count += 1
 
         return activity_matrix
     

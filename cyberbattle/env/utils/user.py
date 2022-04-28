@@ -1,17 +1,19 @@
 
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Set
 import random
-import time
 
 from .data import *
-from .machine import Machine, get_machines_by_name
+from .machine import Machine, get_machines_by_name, firewall_instances
+from .network import Network
+from ...utils.functions import kahansum
+from ...utils.markov_models import MultiMarkovProcess
 
 
 class Activity:
     """Define an user activity during an environment step."""
 
-    def __init__(self, source: str=None, activity: bool=False, where: str=None, action: str=None, service: str=None) -> None:
+    def __init__(self, source: str=None, activity: bool=False, where: str=None, action: str=None, service: str=None, error: bool=None) -> None:
         """Init the activity.
         
         Input:
@@ -19,7 +21,8 @@ class Activity:
         activity: indicates whether or not an activity is taking place (bool), default value is False
         where: the instance name of the machine where the activity takes place (str), default value is None
         action: the data source triggered (str), default value is None
-        service: the service the user want to use to perform the activity (str), default value is None.
+        service: the service the user want to use to perform the activity (str), default value is None
+        error: whether the activity was executed without any troubles or not (bool), for instance the activity can be stuck because of a firewall rule or a machine stoped running, default value is None.
         Output: None
         """
         self.activity = activity
@@ -37,11 +40,19 @@ class Activity:
             
             if not service:
                 raise ValueError('Please indicate the service the user want to use to perform the activity.')
+
+            if error is None:
+                raise ValueError('Please indicate whether the activity was executed without any troubles or not.')
             
         self.action = action
         self.where = where
         self.source = source
         self.service = service
+        self.error = error
+    
+    def get_description(self) -> str:
+        """Describe the activity."""
+        return f"Is activity : {self.activity}, source : {self.source}, target : {self.where}, port : {self.service}, data source triggered : {self.action}, is error : {self.error}"
     
     def is_activity(self) -> str:
         """Return whether there is activity or not."""
@@ -62,13 +73,17 @@ class Activity:
     def get_service(self) -> str:
         """Return the service used."""
         return self.service
+    
+    def is_error(self) -> bool:
+        """Return whether the activity was executed without any troubles or not."""
+        return self.error
 
 
-class ProfilePolicy:
-    """Define the behavior of a user profile."""
+class Preferences:
+    """Define the preferences of a user profile."""
 
     def __init__(self, source_local_prior: float=1, target_local_prior: float=1, source_prior: Dict[str, float]=None, target_prior: Dict[str, float]= None) -> None:
-        """Init the user behavior.
+        """Init the user preferences.
         
         Input:
         source_prior: probability that the profile has to exercise an action from his associated PC (float)
@@ -139,10 +154,10 @@ class ProfilePolicy:
 
     def get_target_machine(self, machines: List[Tuple[Machine, str]], user: str) -> Tuple[str, str]:
         """Return the machine instance name and service where the profile will perform among provided machines with respect to the target prior distribution."""
-        machines_name_target = set(self.target_prior.keys())
+        target_machine_names = set(self.target_prior.keys())
         machines_name = set([m.get_name() for (m, _) in machines])
         
-        machines_kept = list(machines_name.intersection(machines_name_target))
+        machines_kept = list(machines_name.intersection(target_machine_names))
         n = len(machines_kept)
 
         if n == 0:
@@ -164,36 +179,29 @@ class ProfilePolicy:
 class Profile:
     """Defines the user profile."""
 
-    def __init__(self, name: str, data_source_distribution: Dict[Data_source, float], policy: ProfilePolicy) -> None:
+    def __init__(self, name: str, behavior: MultiMarkovProcess, preferences: Preferences) -> None:
         """Init the profile.
         
         Input: 
         name: profile name (str)
-        data_source_distribution: the probability distribution of triggering a data source (Dict[Data_source, float])
-        pplicy: user behavior (ProfilePolicy).
+        behavior: a dynamic that defines the activity's user and so the data source he will trigger (MultiMarkovProcess)
+        preferences: user activity location preference (Preferences).
         Output: None.
         """
-        s = kahansum(np.array(list(data_source_distribution.values())))
-        if s > 1 or s < 0:
-            raise ValueError('The sum of the given probabilities : {}, is not between 0 and 1.'.format(s))
-        
-        if sum([1 for ds in data_source_distribution.keys() if isinstance(ds, UserAccount)]) < 1:
-            raise ValueError("The profile isn't able to connect itself to machine. Please add a 'User account' data source.")
+        if sum([1 for data_source in behavior.get_markov_process_list() if not isinstance(data_source, Data_source)]) > 0:
+            raise ValueError("Provided Markov process aren't Data_source instance.")
 
         self.name = name
-        self.no_solicitation_prob = 1 - s
-        self.data_source_distribution: Dict[Data_source, float] = dict()
-        probs = np.cumsum([self.no_solicitation_prob] + list(data_source_distribution.values()))
-
-        for ds, p in zip(data_source_distribution.keys(), probs[1:]):
-
-            self.data_source_distribution[ds] = p
-        
-        self.policy = policy
+        self.behavior = behavior        
+        self.preferences = preferences
     
     def set_instance_name(self, instance_name: str) -> None:
         """Set instance name."""
         self.instance_name = instance_name
+    
+    def generate_activities(self, length: int) -> None:
+        """Generate the user activity sequence for the simulation."""
+        self.behavior.generate_sequence(length)
 
     def get_name(self) -> str:
         """Return the profile name."""
@@ -209,105 +217,115 @@ class Profile:
             raise ValueError("The PC instance name the user is base on has not been yet set.")
         
         return self.PC
-    
+
     def check_policy(self, machines: List[Machine]) -> None:
         """Check if the profile can trigger all source data in the environment with the policy it has been assigned."""
-        target_local_prior = self.policy.get_target_local_prior()
+        target_local_prior = self.preferences.get_target_local_prior()
 
         if target_local_prior == 1:
 
             user_PC = get_machines_by_name(self.PC, machines)[0]
             data_sources_in_PC = set(user_PC.get_available_datasources_profile(self.name))
-            profile_data_source = set([ds.get_data_source() for ds in self.data_source_distribution.keys()])
+            profile_data_source: Set[Data_source] = set([ds.get_data_source() for ds in self.behavior.get_markov_process_list()])
 
             if not profile_data_source.issubset(data_sources_in_PC):
                 raise ValueError(f"Data sources the profil is able to trigger : {profile_data_source} aren't a subset of data sources on his associated PC : {data_sources_in_PC}")
-
-    def get_data_source_distribution(self) -> Dict[Data_source, float]:
-        """Return the profile data source distribution."""
-        return self.data_source_distribution
     
-    def on_step(self, network_machines: List[Machine]) -> Activity:
-        """Return an activity on an environment step with respect to the probability distribution.
+    def on_step(self, network: Network) -> Activity:
+        """Return an activity on an environment step with respect to the user's behavior and his preferences.
         
-        Input: network_machines (List[Machine]).
+        Input: network (Network).
         Output: activity (Activity).
         """
-        p = random.random()
+        data_source: str = self.behavior.call()
+        data_source_name = data_source.split(':')[0]
 
-        if p <= self.no_solicitation_prob:
+        if data_source_name == 'Quiet':
 
             return Activity()
+
+        network_machines = network.get_machine_list()   
+        from_where = self.preferences.get_source_machine(network_machines, self.PC)
+        user_PC = get_machines_by_name(self.PC, network_machines)[0]
+
+        if self.preferences.doing_action_on_its_PC():
+
+            performable, service = user_PC.execute(self.name, data_source_name)
+
+            if performable:
+
+                return Activity(
+                    activity=True,
+                    action=data_source,
+                    where=self.PC,
+                    source=from_where,
+                    service=service,
+                    error=False
+                    )
+            
+            else:
+                
+                return Activity()
+
+        machines: List[Tuple[Machine, str]]= []
         
-        else:
+        for m in network_machines:
             
-            from_where = self.policy.get_source_machine(network_machines, self.PC)
-            p -= self.no_solicitation_prob
-            data_source_distribution = list(self.data_source_distribution.items())
-            n_data_source = len(data_source_distribution)
-            user_PC = get_machines_by_name(self.PC, network_machines)[0]
+            can_perform, service = m.execute(self.get_name(), data_source_name)
 
-            if p <= data_source_distribution[0][1]:
+            if can_perform:
 
-                data_source = data_source_distribution[0][0]
+                machines.append((m, service))
 
-            for i in range(1, n_data_source):
+        if len(machines) == 0:
+            raise ValueError(f"The user {self.instance_name} cannot trigger the data source {data_source_name} in the environment.")
 
-                if p >= data_source_distribution[i-1][1] and p <= data_source_distribution[i][1]:
+        where, service = self.preferences.get_target_machine(machines, user=self.instance_name)
 
-                    data_source = data_source_distribution[i][0]
-                    break
-            
-            if p >= data_source_distribution[n_data_source - 1][1]:
+        path = network.get_path(from_where, where)
+        
+        if not isinstance(path, int):
 
-                data_source = data_source_distribution[n_data_source - 1][0]
+            firewalls = firewall_instances(path)
 
-            performable, service = user_PC.execute(self.name, data_source.get_data_source())
+            for machine_before, firewall in firewalls:
 
-            if self.policy.doing_action_on_its_PC():
-
-                if performable:
+                if not firewall.is_passing(port_name=service, coming_from=machine_before):
 
                     return Activity(
                         activity=True,
-                        action=data_source.call(),
-                        where=self.PC,
+                        action=data_source,
+                        where=where,
                         source=from_where,
-                        service=service
+                        service=service,
+                        error=True
                         )
-                
-                else:
-                    
-                    return Activity()
-    
-            machines: List[Tuple[Machine, str]]= []
             
-            for m in network_machines:
-                
-                can_perform, service = m.execute(self.get_name(), data_source.get_data_source())
+        m = get_machines_by_name(where, network_machines)[0]
 
-                if can_perform:
-
-                    machines.append((m, service))
-
-            if len(machines) == 0:
-                raise ValueError(f"The user {self.instance_name} cannot trigger the data source {data_source.get_data_source()} in the environment.")
-
-            where, service = self.policy.get_target_machine(machines, user=self.instance_name)
+        if not m.is_running():
 
             return Activity(
                 activity=True,
-                action=data_source.call(),
+                action=data_source,
                 where=where,
                 source=from_where,
-                service=service
+                service=service,
+                error=True
                 )
+
+        return Activity(
+            activity=True,
+            action=data_source,
+            where=where,
+            source=from_where,
+            service=service,
+            error=False
+            )
 
     def reset(self) -> None:
         """Reset profile activity."""
-        for data_source in self.get_data_source_distribution().keys():
-
-            data_source.reset()
+        self.behavior.reset()
 
 
 class EnvironmentProfiles:
@@ -344,7 +362,13 @@ class EnvironmentProfiles:
                 self.profiles.append(p)
                 given_PC_count += 1
     
-    def on_step(self) -> List[Activity]:
+    def generate_profile_sequences(self, length: int) -> None:
+        """Generate activities for each profile."""
+        for profile in self.profiles:
+
+            profile.generate_activities(length)
+    
+    def on_step(self, network) -> List[Activity]:
         """Return an array of activities.
         
         Output: Activities which is a list of length self.nb_passive_actors where each element corresponds to the activity of the profile associated with the index (ndarray[Activity]).
@@ -353,7 +377,7 @@ class EnvironmentProfiles:
 
         for i in range(self.nb_profile):
             
-            output.append(self.profiles[i].on_step(self.network_machines))
+            output.append(self.profiles[i].on_step(network))
         
         return output
 
@@ -363,9 +387,9 @@ class EnvironmentProfiles:
 
         for profile in self.profiles:
 
-            data_sources = profile.get_data_source_distribution()
+            data_sources: List[Data_source] = profile.behavior.get_markov_process_list()
 
-            for data_source in data_sources.keys():
+            for data_source in data_sources:
 
                 res += data_source.get_actions()
         
@@ -391,14 +415,25 @@ class DSI(Profile):
 
     def __init__(self) -> None:
         name = 'DSI'
-        data_source_distribution = {
-            CloudStorage(): 0.2,
-            LogonSession(): 0.2,
-            CloudService(): 0.2,
-            Driver(): 0.2,
-            UserAccount(): 0.2
-        }
-        policy = ProfilePolicy(
+        behavior = MultiMarkovProcess(
+            markov_process_list=[
+                CloudStorage(),
+                LogonSession(),
+                CloudService(),
+                Driver(),
+                UserAccount(),
+                Quiet()
+            ],
+            markov_process_transition=np.array([
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25]
+            ])
+        )
+        preferneces = Preferences(
             source_local_prior = 0.6,
             target_local_prior = 0.3,
             source_prior = {
@@ -411,7 +446,7 @@ class DSI(Profile):
                 'PC': 0.2
             }
         )
-        super().__init__(name, data_source_distribution, policy)
+        super().__init__(name, behavior, preferneces)
 
 
 class Dev(Profile):
@@ -419,14 +454,25 @@ class Dev(Profile):
 
     def __init__(self) -> None:
         name = 'Dev'
-        data_source_distribution = {
-            Script(): 0.2,
-            Process(): 0.2,
-            File(): 0.2,
-            Driver(): 0.2,
-            UserAccount():0.2
-        }
-        policy = ProfilePolicy(
+        behavior = MultiMarkovProcess(
+            markov_process_list=[
+                Script(),
+                Process(),
+                File(),
+                Driver(),
+                UserAccount(),
+                Quiet()
+            ],
+            markov_process_transition= np.array([
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
+                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25]
+            ])
+        )
+        preferences = Preferences(
             source_local_prior=0.8,
             target_local_prior=0.5,
             source_prior={
@@ -438,4 +484,4 @@ class Dev(Profile):
                 'PC': 0.1
             }
         )
-        super().__init__(name, data_source_distribution, policy)
+        super().__init__(name, behavior, preferences)

@@ -24,7 +24,9 @@ class Machine:
         outcomes: List[Outcome]=[],
         value: int=0,
         is_infected: bool=False,
-        data_sources: Dict[str, Dict[str, List[str]]]=dict()
+        data_sources: Dict[str, Dict[str, List[str]]]=dict(),
+        flag: bool=False,
+        running: bool=True
     ):
         """Init.
         
@@ -38,7 +40,9 @@ class Machine:
         outcomes: list of possible results of attacks that the attacker can carry out on the machine (List[Outcome])
         value: integer defining the machine importance in the network (int)
         is_infected: if True, it means that the attacker is connected as a local user on the machine at the simulation start (bool)
-        data_sources: dictionary of services offered by the machine linked to accessible data sources for each profile (Dict[str, Dict[str, List[str]]]).
+        data_sources: dictionary of services offered by the machine linked to accessible data sources for each profile (Dict[str, Dict[str, List[str]]])
+        flag: indicates if the attacker can catch a flag by connecting in the machine (bool)
+        running: indicates if the machine is running (bool).
         """
         self.ip_adress = None
         self.outcomes = outcomes
@@ -52,6 +56,21 @@ class Machine:
         self.__is_infected = deepcopy(is_infected)
         self.service_to_data_sources = data_sources
         self.incoming_history: Dict[str, Tuple[list[float], list[str]]] = {s: ([], []) for s in self.get_services()}
+        self.flag = flag
+        self.running = running
+        self.__running = deepcopy(running)
+    
+    def is_running(self) -> bool:
+        """Return whether the machine is running or not."""
+        return self.running
+    
+    def stop(self) -> None:
+        """Stop the machine activity."""
+        self.running = False
+    
+    def start(self) -> None:
+        """Start the machine activity."""
+        self.running = True
     
     def get_services(self) -> List[str]:
         """Return running services."""
@@ -157,6 +176,10 @@ class Machine:
         
         return list(set(profile_data_sources))
     
+    def get_outcome(self, phase_name: str) -> Outcome:
+        """Return the outcome where phase names match."""
+        return [outcome for outcome in self.outcomes if outcome.get_phase_name() == phase_name]
+    
     def update_incoming_history(self, time: float, instance_name: str, service: str) -> None:
         """Update incoming traffic history."""
         self.incoming_history[service][0].append(time)
@@ -203,6 +226,7 @@ class Machine:
         """Reset the machine."""
         self.is_infected = deepcopy(self.__is_infected)
         self.incoming_history = {s: ([], []) for s in self.get_services()}
+        self.running = deepcopy(self.__running)
 
 
 class Plug(Machine):

@@ -68,7 +68,7 @@ def get_machine_list(num_client) -> List[Machine]:
     
     internal_servers = [
         Server(instance_name='DatabaseServer', platforms=['Linux'], connected_machines=['Switch_2'], value=1000, data_sources=database_services,
-        outcomes=[Collection(data='Confidential document', required_right=UserRight.LOCAL_USER, absolute_value=1000)]), 
+        outcomes=[Collection(data='Confidential document', required_right=UserRight.LOCAL_USER, absolute_value=1000, flag=True)]), 
         Server(instance_name='MailServer', platforms=['IaaS'], connected_machines=['Switch_2'], value=200, data_sources=servermail_services,
         outcomes=[LeakedMachineIP(machine_ip=[
             'DatabaseServer', 'CommunicationServer', 'GoogleDrive'], required_right=UserRight.LOCAL_USER)

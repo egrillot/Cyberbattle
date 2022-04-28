@@ -1,16 +1,17 @@
 
 
-from typing import List
+from typing import List, Tuple
 from ..env.utils.flow import Credential, Right, UserRight
 
 class Outcome:
     """Outcome class."""
 
-    def __init__(self, phase_name: str, absolute_value: int=0, required_right: Right=None) -> None:
+    def __init__(self, phase_name: str, absolute_value: int=0, required_right: Right=None, flag: bool=False) -> None:
         """Init."""
         self.phase_name = phase_name
         self.absolute_value = absolute_value
         self.required_right = required_right
+        self.flag = flag
     
     def get_phase_name(self) -> str:
         """Return the phase name."""
@@ -31,80 +32,80 @@ class Outcome:
 class LeakedCredentials(Outcome):
     """LeakedCredentials class."""
 
-    def __init__(self, credentials: List[Credential], absolute_value: int=0, required_right: Right=None) -> None:
+    def __init__(self, credentials: List[Credential], absolute_value: int=0, required_right: Right=None, flag: bool=False) -> None:
         """Init."""
         self.credentials = credentials
         phase_name = "credential-access"
-        super().__init__(phase_name, absolute_value, required_right)
+        super().__init__(phase_name, absolute_value, required_right, flag)
     
-    def get(self) -> List[Credential]:
+    def get(self) -> Tuple[List[Credential], bool]:
         """Return credential list."""
-        return [cred.get_description() for cred in self.credentials]
+        return [cred.get_description() for cred in self.credentials], self.flag
 
 
 class Escalation(Outcome):
     """Escalation class."""
 
-    def __init__(self, userright: UserRight, absolute_value: int=0, required_right: Right=None) -> None:
+    def __init__(self, userright: UserRight, absolute_value: int=0, required_right: Right=None, flag: bool=False) -> None:
         """Init."""
         self.userright = userright
         phase_name = "privilege-escalation"
-        super().__init__(phase_name, absolute_value, required_right)
+        super().__init__(phase_name, absolute_value, required_right, flag)
 
-    def get(self) -> UserRight:
+    def get(self) -> Tuple[UserRight, bool]:
         """Return the new user right."""
-        return self.userright
+        return self.userright, self.flag
 
 
 class LeakedMachineIP(Outcome):
     """LeakedMachineIP class."""
 
-    def __init__(self, machine_ip: List[int], absolute_value: int=0, required_right: Right=None) -> None:
+    def __init__(self, machine_ip: List[int], absolute_value: int=0, required_right: Right=None, flag: bool=False) -> None:
         """Init."""
         self.machine_ip = machine_ip
         phase_name = "discovery"
-        super().__init__(phase_name, absolute_value, required_right)
+        super().__init__(phase_name, absolute_value, required_right, flag)
     
-    def get(self) -> List[int]:
+    def get(self) -> Tuple[List[int], bool]:
         """Return discovered machines."""
-        return self.machine_ip
+        return self.machine_ip, self.flag
 
 
 class LateralMove(Outcome):
     """LateralMove class."""
 
-    def __init__(self, absolute_value: int=0, required_right: Right=None) -> None:
+    def __init__(self, absolute_value: int=0, required_right: Right=None, flag: bool=False) -> None:
         """Init."""
         phase_name = "lateral-movement"
-        super().__init__(phase_name, absolute_value, required_right)
+        super().__init__(phase_name, absolute_value, required_right, flag)
     
-    def get(self) -> str:
+    def get(self) -> Tuple[str, bool]:
         """Return nothing."""
-        return self.phase_name
+        return self.phase_name, self.flag
 
 
 class Reconnaissance(Outcome):
     """Reconnaissance class."""
 
-    def __init__(self, data: str, absolute_value: int=0, required_right: Right=None) -> None:
+    def __init__(self, data: str, absolute_value: int=0, required_right: Right=None, flag: bool=False) -> None:
         """Init."""
         self.data = data
         phase_name = "reconnaissance"
-        super().__init__(phase_name, absolute_value, required_right)
+        super().__init__(phase_name, absolute_value, required_right, flag)
     
-    def get(self) -> str:
+    def get(self) -> Tuple[str, bool]:
         """Return the data."""
-        return self.data
+        return self.data, self.flag
 
 class Collection(Outcome):
     """Collection class."""
 
-    def __init__(self, data: str, absolute_value: int=0, required_right: Right=None) -> None:
+    def __init__(self, data: str, absolute_value: int=0, required_right: Right=None, flag: bool=False) -> None:
         """Init."""
         self.data = data
         phase_name = "collection"
-        super().__init__(phase_name, absolute_value, required_right)
+        super().__init__(phase_name, absolute_value, required_right, flag)
     
-    def get(self) -> str:
+    def get(self) -> Tuple[str, bool]:
         """Return the data."""
-        return self.data
+        return self.data, self.flag

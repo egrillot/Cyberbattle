@@ -33,10 +33,10 @@ class SiemBox:
         self.instance_name_to_machine = dict([(m.get_instance_name(), m) for m in network.get_machine_list()])
         self.instance_name_to_machine_ip = dict([(m.get_instance_name(), m.get_ip_adress()) for m in network.get_machine_list()])
     
-    def on_step(self, step_count: int, attacker_activity: Activity, start_time: float, display: bool=False) -> np.ndarray:
+    def on_step(self, network: Network, step_count: int, attacker_activity: Activity, start_time: float, display: bool=False) -> np.ndarray:
         """Return what the different profiles did in the environment during the step."""
         res = np.zeros((self.profile_count + 1, 5), dtype=int)
-        activities = self.profiles.on_step() + [attacker_activity]
+        activities = self.profiles.on_step(network) + [attacker_activity]
 
         to_display = []
 
@@ -50,69 +50,30 @@ class SiemBox:
                 machine1_id = self.instance_name_to_machine_ip[machine1]
 
                 action = activity.get_action()
-                
-                if action != 'Stop':
-                
-                    machine2 = activity.get_where()
-                    service = activity.get_service()                
-                    self.instance_name_to_machine[machine2].update_incoming_history(time.time() - start_time, machine1, service)
-                    machine2_id = self.instance_name_to_machine_ip[machine1]
-                    service_id = self.service_to_id[service]
-                    action = activity.get_action()
-                    action_id = self.action_to_id[action]
+                machine2 = activity.get_where()
+                service = activity.get_service()                
+                self.instance_name_to_machine[machine2].update_incoming_history(time.time() - start_time, machine1, service)
 
-                    if machine1 != machine2:
+                machine2_id = self.instance_name_to_machine_ip[machine1]
+                service_id = self.service_to_id[service]
 
-                        path = self.network.get_path(machine1, machine2)
-                        firewalls = firewall_instances(path)
-                        error = 0
+                action = activity.get_action()
+                action_id = self.action_to_id[action]
 
-                        for machine_before, firewall in firewalls:
+                is_error = activity.is_error()
+                error = 1 if is_error else 0
+                e = "yes" if is_error else "no"
 
-                            if not firewall.is_passing(
-                                port_name=service,
-                                coming_from=machine_before
-                            ):
+                log = Log(
+                    source_id=machine1_id,
+                    target_id=machine2_id,
+                    action_id=action_id,
+                    service_id=service_id,
+                    error=error
+                )
+        
+                to_display.append(["yes", machine1, machine2, action, service, e])    
 
-                                error = 1
-                                break
-
-                        log = Log(
-                            source_id=machine1_id,
-                            target_id=machine2_id,
-                            action_id=action_id,
-                            service_id=service_id,
-                            error=error
-                        )
-
-                        e = "yes, action blocked by a firewall" if error == 1 else "no"
-                
-                    else:
-
-                        log = Log(
-                            source_id=machine1_id,
-                            target_id=machine2_id,
-                            action_id=action_id,
-                            service_id=service_id,
-                            error=0
-                        )
-
-                        e = "no"
-                
-                    to_display.append(["yes", machine1, machine2, action, service, e])
-                
-                else:
-
-                    log = Log(
-                        source_id=-1,
-                        target_id=-1,
-                        action_id=-1,
-                        service_id=-1,
-                        error=-1
-                    )
-
-                    to_display.append(["no", "_", "_", "_", "_", "_"])
-            
             else:
 
                 log = Log(
