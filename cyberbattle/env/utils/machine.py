@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 from .data import Data_source
 from ...vulnerabilities.outcomes import Outcome
-from .flow import Traffic, Rule
+from .flow import Traffic, Rule, Line
 
 class Machine:
     """Abstract class to define a machine in the environment."""
@@ -238,9 +238,32 @@ class Plug(Machine):
         if len(connected_machines) <= 1:
             raise ValueError('A plug must at least link 2 machines instead of {}'.format(len(connected_machines)))
 
+        self.accessible_machines = dict([(m, Line.IN) for m in connected_machines])
+
         name = 'Plug'
         url_image = 'Switch.jpg'
         super().__init__(name, instance_name, platforms, connected_machines, url_image, outcomes, value, is_infected, data_sources)
+    
+    def connected(self, machine: str):
+        """Return whether a machine is effectively connected or not."""
+        if machine not in self.connected_machines:
+            raise ValueError(f"The machine {machine} isn't connected to the plug {self.instance_name}.")
+
+        return self.accessible_machines[machine].value == Line.IN.value
+    
+    def unplug(self, machine: str):
+        """Unplug a machine."""
+        if machine not in self.connected_machines:
+            raise ValueError(f"The machine {machine} isn't connected to the plug {self.instance_name}.")
+
+        self.accessible_machines[machine] = Line.OUT
+
+    def plug(self, machine: str):
+        """Plug a machine."""
+        if machine not in self.connected_machines:
+            raise ValueError(f"The machine {machine} isn't connected to the plug {self.instance_name}.")
+
+        self.accessible_machines[machine] = Line.IN
 
 
 class Firewall(Machine):
@@ -283,6 +306,46 @@ class Firewall(Machine):
                 return True
         
         return False
+    
+    def allow_incoming_rule(self, port: str) -> None:
+        """Allow the incoming trafic by the provided port."""
+        traffics = [i for i, traffic in enumerate(self.incomings) if traffic.port == port]
+
+        if not traffics:
+            raise ValueError(f"The incoming traffic by the port {port} isn't managed by the firewall {self.instance_name}.")
+
+        i = traffics[0]
+        self.incomings[i].rule = Rule.ALLOWED
+
+    def block_incoming_rule(self, port: str) -> None:
+        """Block the incoming trafic by the provided port."""
+        traffics = [i for i, traffic in enumerate(self.incomings) if traffic.port == port]
+
+        if not traffics:
+            raise ValueError(f"The incoming traffic by the port {port} isn't managed by the firewall {self.instance_name}.")
+
+        i = traffics[0]
+        self.incomings[i].rule = Rule.BLOCKED
+
+    def allow_outgoing_rule(self, port: str) -> None:
+        """Allow the outgoing trafic by the provided port."""
+        traffics = [i for i, traffic in enumerate(self.outgoings) if traffic.port == port]
+
+        if not traffics:
+            raise ValueError(f"The outgoing traffic by the port {port} isn't managed by the firewall {self.instance_name}.")
+
+        i = traffics[0]
+        self.outgoings[i].rule = Rule.ALLOWED
+
+    def block_outgoing_rule(self, port: str) -> None:
+        """Block the outgoing trafic by the provided port."""
+        traffics = [i for i, traffic in enumerate(self.outgoings) if traffic.port == port]
+
+        if not traffics:
+            raise ValueError(f"The outgoing traffic by the port {port} isn't managed by the firewall {self.instance_name}.")
+
+        i = traffics[0]
+        self.outgoings[i].rule = Rule.BLOCKED
 
 
 class Client(Machine):
@@ -330,3 +393,14 @@ def firewall_instances(path: List[Machine]) -> List[Tuple[Machine, Firewall]]:
             firewalls.append((path[i-1], m))
     
     return firewalls
+
+def plug_instances(path: List[Machine]) -> List[Tuple[Machine, Plug]]:
+    """Return the list of firewalls in the path with the machine from where the traffic is coming."""
+    plugs = []
+    for i, m in enumerate(path):
+
+        if isinstance(m, Plug):
+
+            plugs.append((path[i-1], m))
+    
+    return plugs

@@ -277,8 +277,8 @@ class File(Data_source):
         super().__init__(data_source, description, states, initial_distribution, transition_matrix)
 
 
-class Firewall(Data_source):
-    """Firewall class."""
+class FirewallManage(Data_source):
+    """FirewallManage class."""
 
     def __init__(self) -> None:
         """Init the Data_source Firewall."""

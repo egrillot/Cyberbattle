@@ -4,8 +4,9 @@ from typing import Dict, List, Tuple, Set
 import random
 
 from .data import *
-from .machine import Machine, get_machines_by_name, firewall_instances
+from .machine import Machine, get_machines_by_name, firewall_instances, plug_instances
 from .network import Network
+from .flow import Error
 from ...utils.functions import kahansum
 from ...utils.markov_models import MultiMarkovProcess
 
@@ -13,7 +14,7 @@ from ...utils.markov_models import MultiMarkovProcess
 class Activity:
     """Define an user activity during an environment step."""
 
-    def __init__(self, source: str=None, activity: bool=False, where: str=None, action: str=None, service: str=None, error: bool=None) -> None:
+    def __init__(self, source: str=None, activity: bool=False, where: str=None, action: str=None, service: str=None, error: Error=None) -> None:
         """Init the activity.
         
         Input:
@@ -22,7 +23,7 @@ class Activity:
         where: the instance name of the machine where the activity takes place (str), default value is None
         action: the data source triggered (str), default value is None
         service: the service the user want to use to perform the activity (str), default value is None
-        error: whether the activity was executed without any troubles or not (bool), for instance the activity can be stuck because of a firewall rule or a machine stoped running, default value is None.
+        error: precises the error type (Error), for instance the activity can be stuck because of a firewall rule or a machine stoped running, default value is None.
         Output: None
         """
         self.activity = activity
@@ -73,10 +74,14 @@ class Activity:
     def get_service(self) -> str:
         """Return the service used."""
         return self.service
+
+    def get_error(self) -> Error:
+        """Return the error type."""
+        return self.error
     
     def is_error(self) -> bool:
         """Return whether the activity was executed without any troubles or not."""
-        return self.error
+        return self.error.value == Error.NO_ERROR.value
 
 
 class Preferences:
@@ -86,8 +91,8 @@ class Preferences:
         """Init the user preferences.
         
         Input:
-        source_prior: probability that the profile has to exercise an action from his associated PC (float)
-        target_prior: probability that the profile has to exercise an action on his associated PC (float)
+        source_local_prior: probability that the profile has to exercise an action from his associated PC (float)
+        target_local_prior: probability that the profile has to exercise an action on his associated PC (float)
         source_prior: (optional) dictionary associating to a machine the probability that the source of the profile action is of its type (Dict[str, float])
         target_prior: (optional) dictionary associating to a machine the probability that the target of the profile action is of its type (Dict[str, float]).
         """
@@ -142,20 +147,18 @@ class Preferences:
         """Return the target prior distribution."""
         return self.target_prior
     
-    def get_source_machine(self, machines: List[Machine], user_pc: str) -> str:
+    def get_source_machine(self, user_pc: str) -> str:
         """Return the machine instance name from where the profile will perform his action."""
         if self.doing_action_from_its_PC():
 
             return user_pc
 
-        name = np.random.choice(list(self.source_prior.keys()), p=list(self.source_prior.values()))
-
-        return random.choice([m.get_instance_name() for m in machines if m.get_name() == name])
+        return np.random.choice(list(self.source_prior.keys()), p=list(self.source_prior.values()))
 
     def get_target_machine(self, machines: List[Tuple[Machine, str]], user: str) -> Tuple[str, str]:
         """Return the machine instance name and service where the profile will perform among provided machines with respect to the target prior distribution."""
         target_machine_names = set(self.target_prior.keys())
-        machines_name = set([m.get_name() for (m, _) in machines])
+        machines_name = set([m.get_instance_name() for (m, _) in machines])
         
         machines_kept = list(machines_name.intersection(target_machine_names))
         n = len(machines_kept)
@@ -171,9 +174,9 @@ class Preferences:
         
         new_distribution /= np.sum(new_distribution)
         index = np.random.choice([i for i in range(n)], p=new_distribution)
-        name = machines_kept[index]
+        instance_name = machines_kept[index]
 
-        return random.choice([(m.get_instance_name(), s) for (m, s) in machines if m.get_name() == name])
+        return [(m.get_instance_name(), s) for (m, s) in machines if m.get_instance_name() == instance_name][0]
 
 
 class Profile:
@@ -199,9 +202,9 @@ class Profile:
         """Set instance name."""
         self.instance_name = instance_name
     
-    def generate_activities(self, length: int) -> None:
-        """Generate the user activity sequence for the simulation."""
-        self.behavior.generate_sequence(length)
+    def get_instance_name(self) -> str:
+        """Return the user instance name."""
+        return self.instance_name
 
     def get_name(self) -> str:
         """Return the profile name."""
@@ -245,7 +248,7 @@ class Profile:
             return Activity()
 
         network_machines = network.get_machine_list()   
-        from_where = self.preferences.get_source_machine(network_machines, self.PC)
+        from_where = self.preferences.get_source_machine(self.PC)
         user_PC = get_machines_by_name(self.PC, network_machines)[0]
 
         if self.preferences.doing_action_on_its_PC():
@@ -260,7 +263,7 @@ class Profile:
                     where=self.PC,
                     source=from_where,
                     service=service,
-                    error=False
+                    error=Error.NO_ERROR
                     )
             
             else:
@@ -287,6 +290,7 @@ class Profile:
         if not isinstance(path, int):
 
             firewalls = firewall_instances(path)
+            plugs = plug_instances(path)
 
             for machine_before, firewall in firewalls:
 
@@ -298,8 +302,22 @@ class Profile:
                         where=where,
                         source=from_where,
                         service=service,
-                        error=True
+                        error=Error.BLOCKED_BY_FIREWALL
                         )
+
+            for machine_before, plug in plugs:
+
+                if not plug.connected(machine_before.get_instance_name()):
+
+                    return Activity(
+                        activity=True,
+                        action=data_source,
+                        where=where,
+                        source=from_where,
+                        service=service,
+                        error=Error.MACHINE_NOT_PLUGED
+                        )
+                    
             
         m = get_machines_by_name(where, network_machines)[0]
 
@@ -311,7 +329,7 @@ class Profile:
                 where=where,
                 source=from_where,
                 service=service,
-                error=True
+                error=Error.MACHINE_NOT_RUNNING
                 )
 
         return Activity(
@@ -320,7 +338,7 @@ class Profile:
             where=where,
             source=from_where,
             service=service,
-            error=False
+            error=Error.NO_ERROR
             )
 
     def reset(self) -> None:
@@ -355,18 +373,12 @@ class EnvironmentProfiles:
 
             for j in range(nb_profile):
 
-                p = profile.__class__()
+                p = profile.__class__(self.nb_profile + 1)
                 p.set_instance_name(profile.get_name() + '_' + str(j+1))
                 p.set_PC(total_available_PC[given_PC_count])
                 p.check_policy(machines)
                 self.profiles.append(p)
                 given_PC_count += 1
-    
-    def generate_profile_sequences(self, length: int) -> None:
-        """Generate activities for each profile."""
-        for profile in self.profiles:
-
-            profile.generate_activities(length)
     
     def on_step(self, network) -> List[Activity]:
         """Return an array of activities.
@@ -399,89 +411,12 @@ class EnvironmentProfiles:
         """Return the profile count."""
         return self.nb_profile
     
-    def get_profiles(self) -> Dict[str, int]:
+    def get_profiles(self) -> Dict[Profile, int]:
         """Return profiles."""
-        return dict([(p.get_name(), n) for p, n in self.profiles_dict.items()])
+        return self.profiles
     
     def reset(self) -> None:
         """Reset profile activities."""
         for profile in self.profiles:
 
             profile.reset()
-
-
-class DSI(Profile):
-    """DSI profile."""
-
-    def __init__(self) -> None:
-        name = 'DSI'
-        behavior = MultiMarkovProcess(
-            markov_process_list=[
-                CloudStorage(),
-                LogonSession(),
-                CloudService(),
-                Driver(),
-                UserAccount(),
-                Quiet()
-            ],
-            markov_process_transition=np.array([
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25]
-            ])
-        )
-        preferneces = Preferences(
-            source_local_prior = 0.6,
-            target_local_prior = 0.3,
-            source_prior = {
-                'Server': 0.5,
-                'Cloud': 0.5
-            },
-            target_prior = {
-                'Server': 0.5,
-                'Cloud': 0.3,
-                'PC': 0.2
-            }
-        )
-        super().__init__(name, behavior, preferneces)
-
-
-class Dev(Profile):
-    """Dev class."""
-
-    def __init__(self) -> None:
-        name = 'Dev'
-        behavior = MultiMarkovProcess(
-            markov_process_list=[
-                Script(),
-                Process(),
-                File(),
-                Driver(),
-                UserAccount(),
-                Quiet()
-            ],
-            markov_process_transition= np.array([
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25],
-                [0.15, 0.15, 0.15, 0.15, 0.15, 0.25]
-            ])
-        )
-        preferences = Preferences(
-            source_local_prior=0.8,
-            target_local_prior=0.5,
-            source_prior={
-                'Cloud': 1
-            },
-            target_prior={
-                'Cloud': 0.7,
-                'Server': 0.2,
-                'PC': 0.1
-            }
-        )
-        super().__init__(name, behavior, preferences)

@@ -4,6 +4,33 @@ from typing import Tuple
 from enum import IntEnum
 import numpy as np
 
+
+class Error(IntEnum):
+    """Determinate the error type during a user activity."""
+
+    NO_ERROR = 0
+    MACHINE_NOT_RUNNING = 1
+    BLOCKED_BY_FIREWALL = 2
+    MACHINE_NOT_PLUGED = 3
+
+    def as_string(self) -> str:
+        """Return the error type as a string."""
+        if self.value == 0:
+
+            return 'no error'
+        
+        elif self.value == 1:
+
+            return "machine isn't running"
+        
+        elif self.value == 2:
+
+            return 'blocked by a firewall'
+
+        else:
+
+            return "machine isn't pluged."
+
 class Log:
     """Log class."""
 
@@ -13,7 +40,7 @@ class Log:
         target_id: int,
         action_id: int,
         service_id: int,
-        error: int=0
+        error: int
     ) -> None:
         """Init the log.
         
@@ -22,7 +49,7 @@ class Log:
         target_id: machine ip adress sending the log (int)
         action_id: integer corresponding to the attempted data type on the target machine (int)
         service_id: service id corresponding to the service used by the user (int)
-        error: 0 if the action was successful and 1 otherwise, defaut value: 1 (int).
+        error: 0 if the action was successful and otherwise it refers to the type of error occured (int).
         Output: None.
         """
         self.source_id = source_id
@@ -44,6 +71,13 @@ class Rule(IntEnum):
 
     ALLOWED = 0
     BLOCKED = 1
+
+
+class Line(IntEnum):
+    """Allow us to check whether a machine is efectively connected to a plug or not."""
+
+    IN = 0
+    OUT = 1
 
 
 class Traffic:

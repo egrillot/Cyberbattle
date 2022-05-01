@@ -41,36 +41,18 @@ class MarkovProcess:
             if kahansum(transition_matrix[i, :]) != 1:
                 raise ValueError("The sum over the row {} in the transition matrix isn't equal to 1".format(i))
         
-        self.states = states
+        self.states = np.array(states)
+        self.components = np.arange(states_count)
         self.initial_distribution = initial_distribution
         self.transition_matrix = transition_matrix
-        self.sequence: np.ndarray = None
-        self.index = 0
-    
-    def generate_sequence(self, length: int) -> np.ndarray:
-        """Return a sequence of states with respect to the markov process."""
-        self.sequence = np.zeros((length,), dtype=int)
-        components = np.arange(len(self.states))
-        self.sequence[0] = np.random.choice(components, p=self.initial_distribution)
-        i = 0
-
-        while i != length - 1:
-
-            self.sequence[i + 1] = np.random.choice(components, p=self.transition_matrix[self.sequence[i], :])
-            i += 1
+        self.last_call = None
     
     def call(self) -> object:
         """Return a state with respect to the markov process."""
-        if self.sequence is None:
-            raise ValueError("The sequence must be generated before call it.")
-        
-        if self.index >= self.sequence.shape[0]:
-            raise ValueError(f"The generated sequence has a to small length : {self.sequence.shape[0]}.")
+        index = np.random.choice(self.components, p=self.transition_matrix[self.last_call, :]) if self.last_call else np.random.choice(self.components, p=self.initial_distribution)
+        self.last_call = index
 
-        state = self.states[self.sequence[self.index]]
-        self.index += 1
-
-        return state
+        return self.states[index]
     
     def get_states(self) -> List[object]:
         """Return the state list."""
@@ -78,8 +60,7 @@ class MarkovProcess:
     
     def reset(self) -> None:
         """Reset the Markov process."""
-        self.index = 0
-        self.sequence = None
+        self.last_call = None
 
 
 class MultiMarkovProcess:
@@ -109,47 +90,30 @@ class MultiMarkovProcess:
 
         self.markov_process_list = markov_process_list
         self.markov_process_transition = markov_process_transition
-        self.sequence: np.ndarray = None
-        self.index = 0
+        self.components = np.arange(n_chain)
+        self.last_call = None
     
     def get_markov_process_list(self) -> List[MarkovProcess]:
         """Return the markov process list."""
         return self.markov_process_list
-
-    def generate_sequence(self, length: int) -> np.ndarray:
-        """Return a sequence of states with respect to the markov process."""
-        self.sequence = np.zeros((length,), dtype=int)
-        components = np.arange(len(self.markov_process_list))
-
-        for markov_process in self.markov_process_list:
-
-            markov_process.generate_sequence(length)
-
-        i = 0
-        self.sequence[i] = np.random.choice(components)
-
-        while i != length - 1:
-            
-            self.sequence[i + 1] = np.random.choice(components, p=self.markov_process_transition[self.sequence[i], :])
-            i += 1
     
     def call(self) -> object:
         """Return a state with respect to the markov process."""
-        if self.sequence is None:
-            raise ValueError("The sequence must be generated before call it.")
+        if not self.last_call:
+            
+            chain_index = np.random.choice(self.components)
         
-        if self.index >= self.sequence.shape[0]:
-            raise ValueError(f"The generated sequence has a to small length : {self.sequence.shape[0]}.")
+        else:
 
-        state = self.markov_process_list[self.sequence[self.index]].call()
-        self.index += 1
+            chain_index = np.random.choice(self.components, p=self.markov_process_transition[self.last_call, :])
+            
+        self.last_call = chain_index
 
-        return state
+        return self.markov_process_list[chain_index].call()
     
     def reset(self) -> None:
         """Reset the multi markov process."""
-        self.index = 0
-        self.sequence = None
+        self.last_call = None
 
         for markov_process in self.markov_process_list:
 
