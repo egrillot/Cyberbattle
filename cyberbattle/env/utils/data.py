@@ -197,7 +197,6 @@ class Container(Data_source):
                 [0.25, 0.25, 0.25, 0.25],
                 [0.25, 0.25, 0.25, 0.25],
                 [0.25, 0.25, 0.25, 0.25],
-                [0.25, 0.25, 0.25, 0.25],
                 [0.25, 0.25, 0.25, 0.25]
                 ])
 
@@ -211,7 +210,7 @@ class DomainName(Data_source):
         """Init the Data_source DomainName."""
         data_source = 'Domain Name'
         description = 'Information obtained (commonly through registration or activity logs) regarding one or more IP addresses registered with human readable names (ex: mitre.org)'
-        states = ['Active DNS', 'Domain Registration', 'Passive DNS'],
+        states = ['Active DNS', 'Domain Registration', 'Passive DNS']
         initial_distribution = np.array([0.3, 0.3, 0.4])
         transition_matrix = np.array([
             [0.3, 0.3, 0.4],
@@ -284,7 +283,7 @@ class FirewallManage(Data_source):
         """Init the Data_source Firewall."""
         data_source = 'Firewall'
         description = 'A network security system, running locally on an endpoint or remotely as a service (ex: cloud environment), that monitors and controls incoming/outgoing network traffic based on predefined rules'
-        states = ['Firewall Disable', 'Firewall Enumeration', 'Firewall Metadata', 'Firewall Rule Modification'],
+        states = ['Firewall Disable', 'Firewall Enumeration', 'Firewall Metadata', 'Firewall Rule Modification']
         initial_distribution = np.array([0.25, 0.25, 0.25, 0.25])
         transition_matrix = np.array([
             [0.25, 0.25, 0.25, 0.25],
@@ -434,10 +433,11 @@ class MalwareRepository(Data_source):
         data_source = 'Malware Repository'
         description = 'Information obtained (via shared or submitted samples) regarding malicious software (droppers, backdoors, etc.) used by adversaries'
         states = ['Malware Repository Creation', 'Malware Repository Metadata', 'Passive DNS']
-        initial_distribution = np.array([0.5, 0.5])
+        initial_distribution = np.array([0.3, 0.3, 0.4])
         transition_matrix = np.array([
-            [0.5, 0.5],
-            [0.5, 0.5]
+            [0.3, 0.3, 0.4],
+            [0.3, 0.3, 0.4],
+            [0.3, 0.3, 0.4]
         ])
 
         super().__init__(data_source, description, states, initial_distribution, transition_matrix)
@@ -725,7 +725,7 @@ class WMI(Data_source):
         data_source = 'WMI'
         description = 'The infrastructure for management data and operations that enables local and remote management of Windows personal computers and servers'
         states = ['WMI Creation']
-        initial_distribution = np.array([[1.]])
+        initial_distribution = np.array([1.])
         transition_matrix = np.array([[1.]])
 
         super().__init__(data_source, description, states, initial_distribution, transition_matrix)

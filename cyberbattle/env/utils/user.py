@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple, Set
 import random
 
 from .data import *
-from .machine import Machine, get_machines_by_name, firewall_instances, plug_instances
+from .machine import Machine, get_machines_by_name, trouble
 from .network import Network
 from .flow import Error
 from ...utils.functions import kahansum
@@ -288,48 +288,14 @@ class Profile:
         path = network.get_path(from_where, where)
         
         if not isinstance(path, int):
-
-            firewalls = firewall_instances(path)
-            plugs = plug_instances(path)
-
-            for machine_before, firewall in firewalls:
-
-                if not firewall.is_passing(port_name=service, coming_from=machine_before):
-
-                    return Activity(
-                        activity=True,
-                        action=data_source,
-                        where=where,
-                        source=from_where,
-                        service=service,
-                        error=Error.BLOCKED_BY_FIREWALL
-                        )
-
-            for machine_before, plug in plugs:
-
-                if not plug.connected(machine_before.get_instance_name()):
-
-                    return Activity(
-                        activity=True,
-                        action=data_source,
-                        where=where,
-                        source=from_where,
-                        service=service,
-                        error=Error.MACHINE_NOT_PLUGED
-                        )
-                    
             
-        m = get_machines_by_name(where, network_machines)[0]
-
-        if not m.is_running():
-
             return Activity(
                 activity=True,
                 action=data_source,
                 where=where,
                 source=from_where,
                 service=service,
-                error=Error.MACHINE_NOT_RUNNING
+                error=trouble(path, service)
                 )
 
         return Activity(
@@ -361,7 +327,7 @@ class EnvironmentProfiles:
         self.nb_profile = sum([n for _, n in profiles.items()])
         given_PC_count = 0
         self.network_machines = machines
-        total_available_PC = [m.get_instance_name() for m in machines if (m.get_name() == 'PC' and not m.is_infected)]
+        total_available_PC = [m.get_instance_name() for m in machines if m.get_name() == 'PC']
 
         if len(total_available_PC) != self.nb_profile:
             raise ValueError('The environment does not have enough PCs for all profiles provided, number of profiles: {}, number of PCs: {}'.format(self.nb_profile, len(total_available_PC)))

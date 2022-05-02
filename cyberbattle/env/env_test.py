@@ -1,21 +1,21 @@
 """This file is used to test the different networks in the baseline and the functions/objects in the env directory."""
 
 from typing import List
-from ..vulnerabilities.attacks import AttackSet
-from .samples import little_network
+from .samples.little_network import get_little_environment_network, get_little_environment_profiles
 from .utils.data import Data_source
 from .utils.machine import Machine
 
 num_client = 4
+network = get_little_environment_network(num_client)
+
 
 def test_little_environment_init():
 
-    net = little_network.get_little_environment_network(num_client)
     #net.display(annotations=True)
-    paths: List[Machine] = net.get_paths()
+    paths: List[Machine] = network.get_paths()
 
-    instance_name_to_index = net.instance_name_to_index
-    instance_name_to_machine = net.instance_name_to_machine
+    instance_name_to_index = network.instance_name_to_index
+    instance_name_to_machine = network.instance_name_to_machine
 
     idx1 = instance_name_to_index['PC_1']
     idx2 = instance_name_to_index['DatabaseServer']
@@ -36,8 +36,8 @@ def test_little_environment_init():
     assert len(switch_2.get_connected_machines()) > 1
     assert len(firewall_1.get_connected_machines()) == 2
     assert len(firewall_2.get_connected_machines()) == 2
-    assert set(net.get_services()) == set(['HTTPS', 'sudo'])
-    assert set(net.get_available_datasources()) == set(['User Account',
+    assert set(network.get_services()) == set(['HTTPS', 'sudo'])
+    assert set(network.get_available_datasources()) == set(['User Account',
                                                         'Logon Session',
                                                         'File',
                                                         'Script',
@@ -53,15 +53,17 @@ def test_data_sources():
     for ds in data_sources:
 
         a = ds()
+        ds_name = a.get_data_source()
         actions = [a.call() for _ in range(10)]
         assert len(actions) == 10
+        assert sum([1 for action in actions if ds_name in action]) == 10
 
 def test_little_environment_profiles_init():
 
-    env_profiles = little_network.get_little_environment_profiles(num_client)
+    env_profiles = get_little_environment_profiles(num_client)
 
-    assert env_profiles.nb_profile == num_client - 1
-    activities =  env_profiles.on_step()
+    assert env_profiles.nb_profile == num_client
+    activities =  env_profiles.on_step(network)
 
-    assert len(activities) == num_client - 1
+    assert len(activities) == num_client
 

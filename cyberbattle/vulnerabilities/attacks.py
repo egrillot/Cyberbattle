@@ -212,45 +212,54 @@ class Attack:
 
 def pass_filter(
     attack: Dict[str, List[str]],
-    platforms_outcomes_couple_per_machine: Dict[str, Tuple[List[str], List[Tuple[str, UserRight]]]]
-    ) -> Tuple[bool, List[str], Dict[str, List[Tuple[bool, str, UserRight]]]]:
+    platforms_outcomes_couple_per_machine: Dict[str, Tuple[List[str], List[str], List[Tuple[str, UserRight]]]]
+    ) -> Tuple[bool, List[str], Dict[str, List[Tuple[bool, str, UserRight]]], List[str]]:
     """Return whether the attack can be executed on a machine in the environment and if so which one.
 
     Input: 
     attack: mitre attack (Dict[str, List[str]])
-    platforms_outcomes_couple_per_machine: dictionary that links machine instance name to its platforms and outcome phase names (Dict[str, Tuple[List[str], List[Tuple(str, UserRight)]]]).
-    Output: (Tuple[bool, int, Dict[str, List[bool]]]).
+    platforms_outcomes_couple_per_machine: dictionary that links machine instance name to its platforms, available data sources that can be triggered and outcome phase names (Dict[str, Tuple[List[str], List[str], List[Tuple[str, UserRight]]]]).
+    Output: a tuple refering to whether the attack successfully passed the filter, the machine instance name the attack can be applied, the available outcomes in each machine and a list of data source that can be triggered by the targetable machines (Tuple[bool, List[str], Dict[str, List[Tuple[bool, str, UserRight]]], List[str]]).
     """
     instance_names = []
     matched_outcome_count: Dict[str, List[bool]] = dict()
+    data_sources_intersection = set()
 
     if "name" in attack:
 
-        if "kill_chain_phases" in attack:
+        if "x_mitre_data_sources" in attack:
 
-            outcomes = [d["phase_name"].lower() for d in attack["kill_chain_phases"]]
+            if "kill_chain_phases" in attack:
 
-            if "x_mitre_platforms" in attack: 
+                outcomes = [d["phase_name"].lower() for d in attack["kill_chain_phases"]]
 
-                platforms = set(low(attack['x_mitre_platforms']))
+                if "x_mitre_platforms" in attack: 
 
-                for instance_name, (p, phase_names_and_userrights) in platforms_outcomes_couple_per_machine.items():
+                    platforms = set(low(attack['x_mitre_platforms']))
 
-                    if len(set(p).intersection(platforms)) > 0:
+                    for instance_name, (p, data_sources, phase_names_and_userrights) in platforms_outcomes_couple_per_machine.items():
 
-                        matched_outcome_count[instance_name] = [(False, '') * len(phase_names_and_userrights)]
-                        for i, (phase_name, userright) in enumerate(phase_names_and_userrights):
- 
-                            if phase_name in outcomes:
+                        if len(set(p).intersection(platforms)) > 0:
 
-                                instance_names.append(instance_name)
-                                matched_outcome_count[instance_name][i] = (True, phase_name, userright)
+                            data_sources_intersection_on_machine = set([ds.split(':')[0] for ds in attack['x_mitre_data_sources']]).intersection(set(data_sources))
+
+                            if len(data_sources_intersection_on_machine) > 0:
+
+                                data_sources_intersection.update(data_sources_intersection_on_machine)
+                                matched_outcome_count[instance_name] = [(False, '') * len(phase_names_and_userrights)]
+
+                                for i, (phase_name, userright) in enumerate(phase_names_and_userrights):
+        
+                                    if phase_name in outcomes:
+
+                                        instance_names.append(instance_name)
+                                        matched_outcome_count[instance_name][i] = (True, phase_name, userright)
 
     if len(instance_names) != 0:
 
-        return True, instance_names, matched_outcome_count
+        return True, instance_names, matched_outcome_count, list(data_sources_intersection)
 
-    return False, None, None
+    return False, None, None, None
 
 
 class AttackSet:
@@ -287,51 +296,45 @@ class AttackSet:
                 
                 platforms_outcomes_couple[
                     m.get_instance_name()
-                    ] = (low(m.get_platforms()),
+                    ] = (low(m.get_platforms()), m.get_flat_data_sources(),
                      [(outcome.get_phase_name().lower(), outcome.get_required_right()) for outcome in outcomes]
                      )
 
         for mitre_attack in mitre_attacks:
 
-            is_passing, instance_names, matched_outcome_count = pass_filter(mitre_attack, platforms_outcomes_couple)
+            is_passing, instance_names, matched_outcome_count, data_sources_intersection = pass_filter(mitre_attack, platforms_outcomes_couple)
 
             if is_passing:
 
                 attack = Attack(mitre_attack)
-                data_sources = attack.get_data_sources()
-                outcomes = attack.get_outcomes()
-                data_sources_intersection = set(data_sources).intersection(set(self.available_actions))
-
-                if len(data_sources_intersection) != 0:
-
-                    attack.modify_data_sources([random.choice(list(data_sources_intersection))])
+                attack.modify_data_sources(data_sources_intersection)
                     
-                    for instance_name in instance_names:
+                for instance_name in instance_names:
 
-                        for i, match in enumerate(matched_outcome_count[instance_name]):
-                            
-                            if match[0]:
+                    for i, match in enumerate(matched_outcome_count[instance_name]):
+                        
+                        if match[0]:
 
-                                required_right = match[2]
-                                attack_kept = False
-                                attack_type = attack.get_type()
+                            required_right = match[2]
+                            attack_kept = False
+                            attack_type = attack.get_type()
 
-                                if required_right is not None:
+                            if required_right is not None:
 
-                                    if attack_type == ActionType.LOCAL:
+                                if attack_type == ActionType.LOCAL:
 
-                                        attack_kept = True
+                                    attack_kept = True
 
-                                else:
-                                    
-                                    if attack_type == ActionType.REMOTE:
+                            else:
+                                
+                                if attack_type == ActionType.REMOTE:
 
-                                        attack_kept = True
+                                    attack_kept = True
 
-                                if attack_kept:
-                                    
-                                    attack.modify_outcomes(new_outcome=[match[1]])
-                                    attacks_by_machines[instance_name][i].append(attack)
+                            if attack_kept:
+                                
+                                attack.modify_outcomes(new_outcome=[match[1]])
+                                attacks_by_machines[instance_name][i].append(attack)
         
         for instance_name, attacks_per_outcomes in attacks_by_machines.items():
 

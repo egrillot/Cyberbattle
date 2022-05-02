@@ -24,7 +24,7 @@ class Network:
         """
         if len(set([m.get_instance_name() for m in machines])) != len(machines):
             raise ValueError("Machine instance names aren't unique.")
-
+  
         self.name = name
         self.machine_list = machines
         self.ip_adresses_encoder = dict() # encode an ip adress to an index
@@ -77,7 +77,6 @@ class Network:
                     idx1 = self.instance_name_to_index[machine1]
                     idx2 = self.instance_name_to_index[machine2]
                     self.paths[idx1, idx2] = [self.instance_name_to_machine[m] for m in paths[0]]
-                    
     
     def display(self, save_figure: str=None, annotations: bool=False) -> None:
         """Display the network.

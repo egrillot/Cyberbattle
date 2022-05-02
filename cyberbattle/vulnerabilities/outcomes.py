@@ -40,7 +40,7 @@ class LeakedCredentials(Outcome):
     
     def get(self) -> Tuple[List[Credential], bool]:
         """Return credential list."""
-        return [cred.get_description() for cred in self.credentials], self.flag
+        return self.credentials, self.flag
 
 
 class Escalation(Outcome):

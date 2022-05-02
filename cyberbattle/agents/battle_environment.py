@@ -65,6 +65,10 @@ class CyberBattleEnv(gym.Env):
         self.__done = False
         self.__start_time = time.time()
     
+    def get_start_time(self) -> float:
+        """Return the starting time of the simulation."""
+        return self.__start_time
+    
     def check_environment(self) -> None:
         """Check if the environment can run correctly."""
         profiles = self.__profiles.get_profiles().keys()
@@ -100,7 +104,7 @@ class CyberBattleEnv(gym.Env):
     
     def is_done(self) -> bool:
         """Return if the simulation is done or not."""
-        return self.__done or self.__step_count == self.__n_iteration - 1
+        return self.__done
 
     def step(self, display_Siem=False): #à terminer
         """Run a step time during the simulation."""

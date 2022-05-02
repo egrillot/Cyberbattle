@@ -2,9 +2,10 @@
 
 
 import numpy as np
+import random
 
 from typing import List
-from ...vulnerabilities.outcomes import LeakedCredentials, LeakedMachineIP, Collection
+from ...vulnerabilities.outcomes import LeakedCredentials, LeakedMachineIP, Reconnaissance, Collection
 from ..utils.user import Profile, EnvironmentProfiles, Preferences
 from ..utils.network import Network
 from ..utils.flow import Traffic, Rule, UserRight, Credential
@@ -42,7 +43,7 @@ servermail_services = {
 
 database_services = {
     'DSI': {
-        'HTTPS': ['Cloud Storage', 'Cloud Service', 'User Account']
+        'HTTPS': ['Cloud Storage', 'Cloud Service', 'User Account', 'Logon Session']
     }
 }
 
@@ -50,13 +51,8 @@ def get_machine_list(num_client) -> List[Machine]:
     """Return list of machines to build the environment."""
 
     client_machines = [
-        Client(instance_name='PC_{}'.format(i+2), platforms=['Windows'], connected_machines=['Switch_1'], value=0, data_sources=client_services)
-        for i in range(num_client - 2)
-        ] + [
-            Client(instance_name='PC_1', platforms=['Windows'], connected_machines=['Switch_1'], value=0, is_infected=True, data_sources=client_services,
-            outcomes=[
-                LeakedMachineIP(machine_ip=['PC_{}'.format(i+1) for i in range(num_client)])
-            ])
+        Client(instance_name='PC_{}'.format(i+1), platforms=['Windows'], connected_machines=['Switch_1'], value=0, data_sources=client_services)
+        for i in range(num_client - 1)
         ] + [
             Client(instance_name='PC_{}'.format(num_client), platforms=['Windows'], connected_machines=['Switch_1'], value=0, data_sources=client_services,
             outcomes=[
@@ -71,7 +67,7 @@ def get_machine_list(num_client) -> List[Machine]:
         ]
     
     internal_servers = [
-        Server(instance_name='DatabaseServer', platforms=['Linux'], connected_machines=['Switch_2'], value=1000, data_sources=database_services,
+        Server(instance_name='DatabaseServer', platforms=['Windows'], connected_machines=['Switch_2'], value=1000, data_sources=database_services,
         outcomes=[Collection(data='Confidential document', required_right=UserRight.LOCAL_USER, absolute_value=1000, flag=True)]), 
         Server(instance_name='MailServer', platforms=['IaaS'], connected_machines=['Switch_2'], value=200, data_sources=servermail_services,
         outcomes=[LeakedMachineIP(machine_ip=[
@@ -119,6 +115,10 @@ def get_machine_list(num_client) -> List[Machine]:
     for i, m in enumerate(machine_list):
 
         m.set_ip_adress(i)
+
+    i = np.random.randint(0, num_client - 1)
+    machine_list[i].infected_at_start()
+    machine_list[i].outcomes = [LeakedMachineIP(machine_ip=['PC_{}'.format(i+1) for i in range(num_client)], required_right=UserRight.LOCAL_USER)]
     
     return machine_list
 
@@ -207,7 +207,7 @@ class Dev(Profile):
 def get_little_environment_profiles(num_client) -> EnvironmentProfiles:
     """Return the environment profiles."""
     profiles = {
-        Dev(num_client): num_client - 2,        
+        Dev(num_client): num_client - 1,        
         DSI(num_client): 1
     }
     machine_list = get_machine_list(num_client)

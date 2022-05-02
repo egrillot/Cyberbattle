@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 from .data import Data_source
 from ...vulnerabilities.outcomes import Outcome
-from .flow import Traffic, Rule, Line
+from .flow import Traffic, Rule, Line, Error, Right, UserRight
 
 class Machine:
     """Abstract class to define a machine in the environment."""
@@ -39,7 +39,7 @@ class Machine:
         url_image: image url to display the machine (str)
         outcomes: list of possible results of attacks that the attacker can carry out on the machine (List[Outcome])
         value: integer defining the machine importance in the network (int)
-        is_infected: if True, it means that the attacker is connected as a local user on the machine at the simulation start (bool)
+        is_infected: if True, it means that the attacker is connected as a local user on the machine (bool)
         data_sources: dictionary of services offered by the machine linked to accessible data sources for each profile (Dict[str, Dict[str, List[str]]])
         flag: indicates if the attacker can catch a flag by connecting in the machine (bool)
         running: indicates if the machine is running (bool).
@@ -59,11 +59,31 @@ class Machine:
         self.flag = flag
         self.running = running
         self.__running = deepcopy(running)
+        self.attacker_right = Right(right=UserRight.LOCAL_USER) if is_infected else Right(right=UserRight.NO_ACCESS)
     
     def is_running(self) -> bool:
         """Return whether the machine is running or not."""
         return self.running
     
+    def infect(self) -> None:
+        """Infect the machine."""
+        self.is_infected = True
+        self.update_attacker_right(UserRight.LOCAL_USER)
+    
+    def infected_at_start(self) -> None:
+        """Infect the machine at the simulation start."""
+        self.__is_infected = True
+        self.is_infected = True
+        self.update_attacker_right(UserRight.LOCAL_USER)
+
+    def get_attacker_right(self) -> Right:
+        """Return the attacker user right on the machine."""
+        return self.attacker_right
+
+    def update_attacker_right(self, userright: UserRight) -> None:
+        """Update the attacker user right on the machine."""
+        return self.attacker_right.escalation(userright)
+       
     def stop(self) -> None:
         """Stop the machine activity."""
         self.running = False
@@ -114,7 +134,7 @@ class Machine:
         """Return the url image."""
         return self.url_image
 
-    def get_value(self) -> str:
+    def get_value(self) -> int:
         """Return the machine value."""
         return self.value
     
@@ -125,6 +145,17 @@ class Machine:
     def get_data_sources(self) -> Dict[str, Dict[str, List[str]]]:
         """Return the data sources."""
         return self.service_to_data_sources
+    
+    def get_flat_data_sources(self) -> List[str]:
+        """Return all data sources that can be triggered in a machine."""
+        data_sources_available = []
+        for data_sources_per_service in self.service_to_data_sources.values():
+
+            for data_sources in data_sources_per_service.values():
+
+                data_sources_available += data_sources
+        
+        return list(set(data_sources_available))
     
     def is_data_source_available(self, data_source: str) -> bool:
         """Return if the data_source is available or not."""
@@ -176,8 +207,8 @@ class Machine:
         
         return list(set(profile_data_sources))
     
-    def get_outcome(self, phase_name: str) -> Outcome:
-        """Return the outcome where phase names match."""
+    def get_outcome(self, phase_name: str) -> List[Outcome]:
+        """Return the outcome where phase name match."""
         return [outcome for outcome in self.outcomes if outcome.get_phase_name() == phase_name]
     
     def update_incoming_history(self, time: float, instance_name: str, service: str) -> None:
@@ -404,3 +435,29 @@ def plug_instances(path: List[Machine]) -> List[Tuple[Machine, Plug]]:
             plugs.append((path[i-1], m))
     
     return plugs
+
+
+def trouble(path: List[Machine], service: str) -> Error:
+    """Return if the error type when the activity took place."""
+    firewalls = firewall_instances(path)
+    plugs = plug_instances(path)
+
+    for machine in path:
+
+        if not machine.is_running():
+
+            return Error.MACHINE_NOT_RUNNING
+
+    for machine_before, firewall in firewalls:
+
+        if not firewall.is_passing(port_name=service, coming_from=machine_before):
+
+            return Error.BLOCKED_BY_FIREWALL
+
+    for machine_before, plug in plugs:
+
+        if not plug.connected(machine_before.get_instance_name()):
+
+            return Error.MACHINE_NOT_PLUGED
+    
+    return Error.NO_ERROR
