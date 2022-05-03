@@ -2,6 +2,10 @@
 
 
 import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import pandas as pd
 import random
 import time
 
@@ -105,8 +109,17 @@ class Attacker:
         self.__attacks_by_machine = attacks_by_machine
         self.__start_time = start_time
         self.__captured_flag = 0
-        self.__rewards = 0
-        self.history: List[Tuple[float, str, str]] = []
+        self.__reward = 0
+        self.__cumulative_reward = []
+        self.history: Dict[str, List[object]] = {
+            'time': [],
+            'attack name': [],
+            'machine instance name': [],
+            'reward': [],
+            'result': [],
+            'type': [],
+            'flag': []
+        }
 
         self.set_positions([m.get_instance_name() for m in network.get_machine_list() if m.is_infected])
     
@@ -122,9 +135,13 @@ class Attacker:
         """Return the attacks as string by index."""
         return dict([(i, a.get_name()) for i, a in self.__attacks.items()])
     
-    def reached_goals(self) -> bool:
-        """Return whether the attacker reached its goals or not."""
-        return self.goals.is_reached()
+    def get_cumulative_rewards(self) -> np.ndarray:
+        """Return the cumulative reward."""
+        return np.cumsum(np.array(self.__cumulative_reward))
+    
+    def get_total_reward(self) -> float:
+        """Return the cumulative reward."""
+        return self.__reward
     
     def set_positions(self, instance_names: List[str]) -> None:
         """Set machines where the attacker is initially connected."""
@@ -142,12 +159,22 @@ class Attacker:
         """Return the discovered credential."""
         return [cred.get_description() for cred in self.__found_credential]
     
-    def get_infected_machines(self) -> List[str]:
-        """Return the infected machine."""
-        return [instance_name for instance_name in self.__discovered_machines if self.__discovered_machines[instance_name].last_connection]
+    def update_history(self, time: float, reward: float, attack_name: str, machine_instance_name: str, result: str, type: str, flag: bool) -> None:
+        """Update the attack history."""
+        self.history['time'].append(time - self.__start_time)
+        self.history['reward'].append(reward)
+        self.history['attack name'].append(attack_name)
+        self.history['machine instance name'].append(machine_instance_name)
+        self.history['result'].append(result)
+        self.history['type'].append(type)
+        self.history['flag'].append(flag)
+
+    def get_infected_machines(self) -> List[Tuple[str, float]]:
+        """Return the infected machine instance name with the last connection time."""
+        return [(instance_name, self.__discovered_machines[instance_name].last_connection - self.__start_time) for instance_name in self.__discovered_machines if self.__discovered_machines[instance_name].last_connection]
     
-    def get_attack_outcome(self, attack: Attack, machine: Machine) -> Tuple[float, bool, str]:
-        """Return if the attack is successfull, the reward executing it on the machine and if a flag has been captured."""
+    def get_attack_outcome(self, attack: Attack, machine: Machine) -> Tuple[bool, float, bool]:
+        """Return whether the attack has been performed successfully, the reward executing it on the machine and whether a flag has been captured or not."""
         instance_name = machine.get_instance_name()
         attack_id = attack.get_id()
         type_attack = attack.get_type()
@@ -160,9 +187,8 @@ class Attacker:
                 reward += Reward.repeat_attack
             
             reward += Reward.failed_attack
-            self.history.append((time.time(), attack.get_name(), machine.get_instance_name()))
 
-            return reward, False, None
+            return False, reward, False
 
         attack_phase_names = attack.get_outcomes()
 
@@ -233,41 +259,58 @@ class Attacker:
 
                     machine.update_attacker_right(user_right)
         
-        return reward, flag
+        return True, reward, flag
     
     def execute_local_action(self, attacker_action: np.ndarray) -> Tuple[float, bool, Activity]:
         """Execute a local action."""
-        machine_instance_name = self.instance_name_by_index(attacker_action[0])
+        machine_instance_name = self.instance_name_by_index(attacker_action[0])        
+        attack = self.__attacks[attacker_action[1]]
 
         if machine_instance_name not in self.__discovered_machines:
             raise ValueError(f"The machine {machine_instance_name} isn't discovered yet.")
         
+        if attack.get_type() == ActionType.REMOTE:
+            raise ValueError("To execute a local action, you need to used an attack with a local type.")
+        
         if not self.__discovered_machines[machine_instance_name].last_connection:
 
-            return Reward.failed_attack, False, Activity()
-        
-        attack = self.__attacks[attacker_action[1]]
+            reward = Reward.failed_attack
+            self.update_history(time.time(), reward, attack.get_name(), machine_instance_name, 'failed', 'local', False)
+
+            return reward, False, Activity()
+
         machine = get_machines_by_name(machine_instance_name, self.__network.get_machine_list())[0]
         
-        reward, flag = self.get_attack_outcome(attack, machine)
+        is_successfull, reward, flag = self.get_attack_outcome(attack, machine)
 
-        port, action = random.choice([(machine.get_service_name(ds), ds) for ds in attack.get_data_sources() if machine.is_data_source_available(ds)])
+        if is_successfull:
 
-        activity = Activity(
-            source=machine_instance_name,
-            activity=True,
-            action=action,
-            where=machine_instance_name,
-            service=port,
-            error=Error.NO_ERROR
-        )
+            port, action = random.choice([(machine.get_service_name(ds), ds) for ds in attack.get_data_sources() if machine.is_data_source_available(ds)])
 
-        return reward, flag, activity
+            activity = Activity(
+                source=machine_instance_name,
+                activity=True,
+                action=action,
+                where=machine_instance_name,
+                service=port,
+                error=Error.NO_ERROR
+            )
+            
+            self.update_history(time.time(), reward, attack.get_name(), machine.get_instance_name(), 'successfull', 'local', flag)
+
+            return reward, flag, activity
+        
+        self.update_history(time.time(), reward, attack.get_name(), machine.get_instance_name(), 'failed', 'local', flag)
+        
+        return reward, flag, Activity()
 
     def execute_remote_action(self, attacker_action: np.ndarray) -> Tuple[float, bool, Activity]:
         """Execute a remote action."""
         source = self.instance_name_by_index(attacker_action[0])
-        target = self.instance_name_by_index(attacker_action[1])
+        target = self.instance_name_by_index(attacker_action[1])        
+        
+        if source == target:
+            raise ValueError(f"To execute a remote action, the source and the target must be different, the source and target provided are respectively {source} and {target}.")
         
         if source not in self.__discovered_machines:
             raise ValueError(f"The machine {source} isn't discovered yet.")
@@ -287,34 +330,56 @@ class Attacker:
         target_machine = get_machines_by_name(target, self.__network.get_machine_list())[0]
 
         path = self.__network.get_path(source, target)
-        port, action = random.choice([(target_machine.get_service_name(ds), ds) for ds in attack.get_data_sources() if target_machine.is_data_source_available(ds)])
-        error = Error.NO_ERROR if isinstance(path, int) else trouble(path, port)
 
-        if error.value > 0:
+        ports_and_actions = [(target_machine.get_service_name(ds), ds) for ds in attack.get_data_sources() if target_machine.is_data_source_available(ds)]
 
-            activity = Activity(
-                source=source,
-                activity=True,
-                action=action,
-                where=target,
-                service=port,
-                error=error
-            )
+        if len(ports_and_actions) == 0:
 
-            return 0, False, activity
+            reward = Reward.failed_attack
+            self.update_history(time.time(), reward, attack.get_name(), target, 'failed', 'remote', False)
 
-        reward, flag = self.get_attack_outcome(attack, target_machine)
+            return reward, False, Activity()
 
-        activity = Activity(
-            source=source,
-            activity=True,
-            action=action,
-            where=target,
-            service=port,
-            error=Error.NO_ERROR
-        )
+        else:
 
-        return reward, flag, activity
+            port, action = random.choice(ports_and_actions)
+            error = Error.NO_ERROR if isinstance(path, int) else trouble(path, port)
+
+            if error.value > 0:
+
+                activity = Activity(
+                    source=source,
+                    activity=True,
+                    action=action,
+                    where=target,
+                    service=port,
+                    error=error
+                )
+
+                self.update_history(time.time(), 0, attack.get_name(), target, 'network failed', 'remote', False)
+
+                return 0, False, activity
+
+            is_successfull, reward, flag = self.get_attack_outcome(attack, target_machine)
+
+            if is_successfull:
+
+                activity = Activity(
+                    source=source,
+                    activity=True,
+                    action=action,
+                    where=target,
+                    service=port,
+                    error=Error.NO_ERROR
+                )
+
+                self.update_history(time.time(), reward, attack.get_name(), target, 'successfull', 'remote', flag)
+
+                return reward, flag, activity
+
+            self.update_history(time.time(), reward, attack.get_name(), target, 'failed', 'remote', flag)
+
+            return reward, flag, Activity()
     
     def connect(self, attacker_action: np.ndarray) -> Tuple[float, bool, Activity]:
         """Connect."""
@@ -325,7 +390,10 @@ class Attacker:
 
         if not self.__discovered_machines[source].last_connection:
 
-            return Reward.failed_attack, False, Activity()
+            reward = Reward.failed_attack
+            self.update_history(time.time(), reward, 'User Account Authentification', target, 'failed', 'connect', False)
+
+            return reward, False, Activity()
         
         credential = self.__found_credential[attacker_action[1]]
         target = credential.machine
@@ -341,8 +409,10 @@ class Attacker:
             if self.__discovered_machines[target].last_connection:
 
                 self.__discovered_machines[target].last_connection = time.time()
+                reward = Reward.repeat_attack
+                self.update_history(time.time(), reward, 'User Account Authentification', target, 'repeat', 'connect', False)
 
-                return Reward.repeat_attack, False, Activity() 
+                return reward, False, Activity() 
         
         error = trouble(path, service)
 
@@ -357,7 +427,9 @@ class Attacker:
                 error=error
             )
 
-            return 0, activity
+            self.update_history(time.time(), 0, 'User Account Authentification', target, 'network failed', 'connect', False)
+
+            return 0, False, activity
 
         reward = 0
 
@@ -365,9 +437,10 @@ class Attacker:
             
             self.__discovered_machines[target].last_connection = time.time()
             reward += Reward.connection
-            source_machine = path[0]
-            reward += source_machine.get_value()
-            source_machine.infect()
+            target_machine = path[-1]
+            reward += target_machine.get_value()
+            target_machine.infect()
+            flag = target_machine.is_flag()
         
         activity = Activity(
                 source=source,
@@ -377,14 +450,16 @@ class Attacker:
                 service=service,
                 error=error
         )
+
+        self.update_history(time.time(), reward, 'User Account Authentification', target, 'successfull', 'connect', flag)
         
-        return reward, activity
+        return reward, flag, activity
         
     def on_step(self, attacker_action: Dict[str, np.ndarray]) -> Tuple[float, Activity]:
         """Return the attacker activity."""
         if 'connect' in attacker_action:
 
-            return self.connect(attacker_action['connect'])
+            reward, flag, activity = self.connect(attacker_action['connect'])
 
         elif 'submarine' in attacker_action:
 
@@ -402,7 +477,8 @@ class Attacker:
 
             self.__captured_flag += 1
         
-        self.__rewards += reward
+        self.__reward += reward
+        self.__cumulative_reward.append(reward)
         
         return reward, activity
     
@@ -412,16 +488,31 @@ class Attacker:
     
     def reached_goals(self) -> bool:
         """Return whether the goals are reached or not."""
-        return self.goals.is_reached(self.__rewards, self.__captured_flag)
+        return self.goals.is_reached(self.__reward, self.__captured_flag)
         
-    def reset(self) -> None:
+    def reset(self, new_start_time: float) -> None:
         """Reset the attacker attributes."""
 
         self.__found_credential: List[Credential] = []
         self.__discovered_machines: Dict[str, MachineActivityHistory] = dict()
         self.__network.reset()
+        self.__start_time = new_start_time
         self.__captured_flag = 0
-        self.__rewards = 0
+        self.__reward = 0
+        self.__cumulative_reward = []
 
         self.set_positions([m.get_instance_name() for m in self.__network.get_machine_list() if m.is_infected])
-        
+    
+    def display_history(self) -> None:
+        """Display the attacker action history through a time line."""
+        self.history['cumulative reward'] = self.get_cumulative_rewards()
+        df = pd.DataFrame(self.history, columns=['time', 'reward', 'attack name', 'machine instance name', 'result', 'type', 'flag', 'cumulative reward'])
+        fig = px.scatter(df, x='time', y='cumulative reward', color='result', symbol='type', title="Attacker history", hover_data=['reward', 'attack name', 'machine instance name', 'type', 'flag'])
+        #fig.update_traces(mode="markers+lines")
+        fig.show()
+    
+    def get_attacker_history(self) -> Dict[str, object]:
+        """Return the attacker attack history."""
+        self.history['cumulative reward'] = self.get_cumulative_rewards()
+
+        return self.history

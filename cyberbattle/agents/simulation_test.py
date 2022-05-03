@@ -12,16 +12,5 @@ profiles = {
 }
 env = CyberBattleEnv(net, profiles)
 
-def test_simulation_little_network_init():
+#def test_simulation_little_network_init():
 
-    profile_count = env.get_profile_count()
-    for _ in range(10):
-        matrix = env.step()
-        assert matrix.shape == (profile_count + 1, 5)
-
-    assert env.get_step_count() == 10
-    
-    env.reset()
-
-    assert env.get_step_count() == 0
-    assert not env.is_done()

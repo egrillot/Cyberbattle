@@ -65,6 +65,10 @@ class Machine:
         """Return whether the machine is running or not."""
         return self.running
     
+    def is_flag(self) -> bool:
+        """Return if the attacker can captured a flag by infecting the machine."""
+        return self.flag
+    
     def infect(self) -> None:
         """Infect the machine."""
         self.is_infected = True

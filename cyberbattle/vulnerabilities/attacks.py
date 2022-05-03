@@ -285,7 +285,7 @@ class AttackSet:
         self.attacks: Dict[str, List[Attack]] = {m.get_instance_name(): [] for m in machines}
         platforms_outcomes_couple = dict()
         self.attack_count = 0
-        self.data_sources = []
+        self.data_sources: List[str] = []
         self.available_actions = profiles.get_available_actions()
 
         for m in machines:
@@ -366,8 +366,8 @@ class AttackSet:
         return self.attack_count
 
     def get_data_sources(self) -> List[str]:
-        """Return the data source used with the attack set."""
-        return self.data_sources
+        """Return the data source used within the attack set."""
+        return set([ds.split(':')[0] for ds in self.data_sources])
 
     def get_attacks(self) -> List[Attack]:
         """Return the attack list."""

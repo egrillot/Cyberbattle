@@ -36,6 +36,7 @@ class Log:
 
     def __init__(
         self,
+        time: float,
         source_id: int,
         target_id: int,
         action_id: int,
@@ -45,6 +46,7 @@ class Log:
         """Init the log.
         
         Input:
+        time: time when the activity took place (float)
         source_id: source ip adress (int)
         target_id: machine ip adress sending the log (int)
         action_id: integer corresponding to the attempted data type on the target machine (int)
@@ -52,6 +54,7 @@ class Log:
         error: 0 if the action was successful and otherwise it refers to the type of error occured (int).
         Output: None.
         """
+        self.time = time
         self.source_id = source_id
         self.target_id = target_id
         self.action_id = action_id

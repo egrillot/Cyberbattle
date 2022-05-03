@@ -369,7 +369,7 @@ class EnvironmentProfiles:
 
             for data_source in data_sources:
 
-                res += data_source.get_actions()
+                res += [ds.split(':')[0] for ds in data_source.get_actions()]
         
         return list(set(res))
     

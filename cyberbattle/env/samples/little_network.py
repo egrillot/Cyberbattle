@@ -5,7 +5,7 @@ import numpy as np
 import random
 
 from typing import List
-from ...vulnerabilities.outcomes import LeakedCredentials, LeakedMachineIP, Reconnaissance, Collection
+from ...vulnerabilities.outcomes import LeakedCredentials, LeakedMachineIP, Collection
 from ..utils.user import Profile, EnvironmentProfiles, Preferences
 from ..utils.network import Network
 from ..utils.flow import Traffic, Rule, UserRight, Credential

@@ -8,8 +8,10 @@ import time
 
 from ..env.utils.network import Network
 from ..env.utils.sensor import SiemBox
-from ..env.utils.user import EnvironmentProfiles, Profile, Activity
+from ..env.utils.user import EnvironmentProfiles, Profile
 from ..vulnerabilities.attacks import AttackSet, Attack
+
+from .attacker.attacker_interface import AttackerGoal, Attacker
 
 
 class CyberBattleEnv(gym.Env):
@@ -53,7 +55,17 @@ class CyberBattleEnv(gym.Env):
         self.id_to_service = {i: s for i, s in enumerate(self.__services)}
         self.service_to_id = {s: i for i, s in enumerate(self.__services)}
 
-        self.SiemBox = SiemBox(env_profiles, network, self.actions_to_id, self.service_to_id)
+        self.__siembox = SiemBox(env_profiles, network, self.actions_to_id, self.service_to_id, 0)
+        self.__attacker = Attacker(
+            goals = AttackerGoal(
+                reward=0,
+                nb_flag=1
+            ),
+            attacks=self.id_to_attack,
+            network=network,
+            attacks_by_machine=self.attacks_by_machine,
+            start_time=0
+        )
 
         self.reset()
     
@@ -64,6 +76,8 @@ class CyberBattleEnv(gym.Env):
         self.__step_count = 0
         self.__done = False
         self.__start_time = time.time()
+        self.__attacker.reset(self.__start_time)
+        self.__siembox.reset(self.__start_time)
     
     def get_start_time(self) -> float:
         """Return the starting time of the simulation."""
@@ -106,15 +120,22 @@ class CyberBattleEnv(gym.Env):
         """Return if the simulation is done or not."""
         return self.__done
 
-    def step(self, display_Siem=False): #à terminer
+    def attacker_step(self, attacker_action: Dict[str, np.ndarray], display_Siem=False): #à terminer
         """Run a step time during the simulation."""
-        attacker_activity = Activity(source='PC_1')
-        activity_matrix = self.SiemBox.on_step(self.__network, self.__step_count, attacker_activity, self.__start_time, display_Siem)
+        reward, attacker_activity = self.__attacker.on_step(attacker_action)
+        activity_matrix = self.__siembox.on_step(self.__network, self.__step_count, attacker_activity, self.__start_time, display_Siem)
+
+        if self.__attacker.reached_goals():
+
+            self.__done = True
 
         self.__step_count += 1
-
-        return activity_matrix
     
     def display_history(self, machine_instance_name: str, service: str) -> None:
         """Display the incoming traffic on the provided machine instance name by the given service."""
         self.instance_name_to_machine[machine_instance_name].display_incoming_history(service)
+
+    def compare_attacker_and_traffic(self) -> None:
+        """Compare the attacker attack history with the traffic"""
+        attacker_history = self.__attacker.get_attacker_history()
+        siem_history = self.__siembox.get_history()
