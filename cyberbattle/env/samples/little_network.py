@@ -150,7 +150,8 @@ class DSI(Profile):
             source_local_prior = 0.8,
             target_local_prior = 0.3,
             source_prior = {
-                'MailServer': 1
+                'MailServer': 0.5,
+                'GoogleDrive': 0.5
             },
             target_prior = {
                 **{

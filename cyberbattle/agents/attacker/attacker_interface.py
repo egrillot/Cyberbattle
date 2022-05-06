@@ -3,8 +3,6 @@
 
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
-import matplotlib.pyplot as plt
 import pandas as pd
 import random
 import time
@@ -104,15 +102,21 @@ class Attacker:
         self.goals = goals
         self.__discovered_machines: Dict[str, MachineActivityHistory] = dict()
         self.__attacks = attacks
+        self.__local_attack_index = [i for i, a in attacks.items() if a.get_type() == ActionType.LOCAL]
+        self.__local_attack_count = len(self.__local_attack_index)
+        self.__remote_attack_index = [i for i, a in attacks.items() if a.get_type() == ActionType.REMOTE]
+        self.__remote_attack_count = len(self.__remote_attack_index)
         self.__found_credential: List[Credential] = []
         self.__network = network
         self.__attacks_by_machine = attacks_by_machine
         self.__start_time = start_time
         self.__captured_flag = 0
         self.__reward = 0
+        self.step_count = 1
         self.__cumulative_reward = []
         self.history: Dict[str, List[object]] = {
             'time': [],
+            'iteration': [],
             'attack name': [],
             'machine instance name': [],
             'reward': [],
@@ -130,6 +134,10 @@ class Attacker:
     def get_discovered_machines(self) -> List[str]:
         """Return the discovered machines and their associated activity history."""
         return list(self.__discovered_machines.keys())
+    
+    def goals_description(self) -> str:
+        """Describe the attacker goals."""
+        return f"The attacker must at least capture {self.goals.nb_flag} flags and at least gather {self.goals.reward} rewards."
     
     def attack_as_string(self) -> Dict[int, str]:
         """Return the attacks as string by index."""
@@ -159,7 +167,7 @@ class Attacker:
         """Return the discovered credential."""
         return [cred.get_description() for cred in self.__found_credential]
     
-    def update_history(self, time: float, reward: float, attack_name: str, machine_instance_name: str, result: str, type: str, flag: bool) -> None:
+    def update_history(self, time: float, reward: float, attack_name: str, machine_instance_name: str, result: str, type: str, flag: bool, step: int) -> None:
         """Update the attack history."""
         self.history['time'].append(time - self.__start_time)
         self.history['reward'].append(reward)
@@ -168,6 +176,7 @@ class Attacker:
         self.history['result'].append(result)
         self.history['type'].append(type)
         self.history['flag'].append(flag)
+        self.history['iteration'].append(step)
 
     def get_infected_machines(self) -> List[Tuple[str, float]]:
         """Return the infected machine instance name with the last connection time."""
@@ -275,7 +284,7 @@ class Attacker:
         if not self.__discovered_machines[machine_instance_name].last_connection:
 
             reward = Reward.failed_attack
-            self.update_history(time.time(), reward, attack.get_name(), machine_instance_name, 'failed', 'local', False)
+            self.update_history(time.time(), reward, attack.get_name(), machine_instance_name, 'failed', 'local', False, self.step_count)
 
             return reward, False, Activity()
 
@@ -296,11 +305,11 @@ class Attacker:
                 error=Error.NO_ERROR
             )
             
-            self.update_history(time.time(), reward, attack.get_name(), machine.get_instance_name(), 'successfull', 'local', flag)
+            self.update_history(time.time(), reward, attack.get_name(), machine.get_instance_name(), 'successfull', 'local', flag, self.step_count)
 
             return reward, flag, activity
         
-        self.update_history(time.time(), reward, attack.get_name(), machine.get_instance_name(), 'failed', 'local', flag)
+        self.update_history(time.time(), reward, attack.get_name(), machine.get_instance_name(), 'failed', 'local', flag, self.step_count)
         
         return reward, flag, Activity()
 
@@ -336,7 +345,7 @@ class Attacker:
         if len(ports_and_actions) == 0:
 
             reward = Reward.failed_attack
-            self.update_history(time.time(), reward, attack.get_name(), target, 'failed', 'remote', False)
+            self.update_history(time.time(), reward, attack.get_name(), target, 'failed', 'remote', False, self.step_count)
 
             return reward, False, Activity()
 
@@ -373,11 +382,11 @@ class Attacker:
                     error=Error.NO_ERROR
                 )
 
-                self.update_history(time.time(), reward, attack.get_name(), target, 'successfull', 'remote', flag)
+                self.update_history(time.time(), reward, attack.get_name(), target, 'successfull', 'remote', flag, self.step_count)
 
                 return reward, flag, activity
 
-            self.update_history(time.time(), reward, attack.get_name(), target, 'failed', 'remote', flag)
+            self.update_history(time.time(), reward, attack.get_name(), target, 'failed', 'remote', flag, self.step_count)
 
             return reward, flag, Activity()
     
@@ -391,7 +400,7 @@ class Attacker:
         if not self.__discovered_machines[source].last_connection:
 
             reward = Reward.failed_attack
-            self.update_history(time.time(), reward, 'User Account Authentification', target, 'failed', 'connect', False)
+            self.update_history(time.time(), reward, 'User Account Authentification', target, 'failed', 'connect', False, self.step_count)
 
             return reward, False, Activity()
         
@@ -410,7 +419,7 @@ class Attacker:
 
                 self.__discovered_machines[target].last_connection = time.time()
                 reward = Reward.repeat_attack
-                self.update_history(time.time(), reward, 'User Account Authentification', target, 'repeat', 'connect', False)
+                self.update_history(time.time(), reward, 'User Account Authentification', target, 'repeat', 'connect', False, self.step_count)
 
                 return reward, False, Activity() 
         
@@ -427,11 +436,12 @@ class Attacker:
                 error=error
             )
 
-            self.update_history(time.time(), 0, 'User Account Authentification', target, 'network failed', 'connect', False)
+            self.update_history(time.time(), 0, 'User Account Authentification', target, 'network failed', 'connect', False, self.step_count)
 
             return 0, False, activity
 
         reward = 0
+        flag = False
 
         if not self.__discovered_machines[target].last_connection:
             
@@ -451,7 +461,7 @@ class Attacker:
                 error=error
         )
 
-        self.update_history(time.time(), reward, 'User Account Authentification', target, 'successfull', 'connect', flag)
+        self.update_history(time.time(), reward, 'User Account Authentification', target, 'successfull', 'connect', flag, self.step_count)
         
         return reward, flag, activity
         
@@ -479,6 +489,7 @@ class Attacker:
         
         self.__reward += reward
         self.__cumulative_reward.append(reward)
+        self.step_count += 1
         
         return reward, activity
     
@@ -500,14 +511,25 @@ class Attacker:
         self.__captured_flag = 0
         self.__reward = 0
         self.__cumulative_reward = []
+        self.step_count = 1        
+        self.history: Dict[str, List[object]] = {
+            'time': [],
+            'iteration': [],
+            'attack name': [],
+            'machine instance name': [],
+            'reward': [],
+            'result': [],
+            'type': [],
+            'flag': []
+        }
 
         self.set_positions([m.get_instance_name() for m in self.__network.get_machine_list() if m.is_infected])
     
-    def display_history(self) -> None:
+    def display_history(self, x='iteration') -> None:
         """Display the attacker action history through a time line."""
         self.history['cumulative reward'] = self.get_cumulative_rewards()
-        df = pd.DataFrame(self.history, columns=['time', 'reward', 'attack name', 'machine instance name', 'result', 'type', 'flag', 'cumulative reward'])
-        fig = px.scatter(df, x='time', y='cumulative reward', color='result', symbol='type', title="Attacker history", hover_data=['reward', 'attack name', 'machine instance name', 'type', 'flag'])
+        df = pd.DataFrame(self.history, columns=['time', 'iteration', 'reward', 'attack name', 'machine instance name', 'result', 'type', 'flag', 'cumulative reward'])
+        fig = px.scatter(df, x=x, y='cumulative reward', color='result', symbol='type', title="Attacker history", hover_data=['time', 'iteration', 'reward', 'attack name', 'machine instance name', 'type', 'flag'])
         #fig.update_traces(mode="markers+lines")
         fig.show()
     
@@ -516,3 +538,55 @@ class Attacker:
         self.history['cumulative reward'] = self.get_cumulative_rewards()
 
         return self.history
+    
+    def sample_random_valid_action(self) -> Dict[str, np.ndarray]:
+        """Sample a random action that the attacker is able to perform."""
+        action_type = np.random.randint(0, 4)
+        infected_machine_index = []
+
+        for i, (_, tracker) in enumerate(self.__discovered_machines.items()):
+            
+            if tracker.last_connection:
+
+                infected_machine_index.append(i)
+        
+        discovered_machine_count = len(self.__discovered_machines)
+
+        if action_type == 0: # connect action
+
+            gathered_creddentials_count = len(self.__found_credential)
+
+            if gathered_creddentials_count > 0:
+
+                source_machine_index = np.random.choice(infected_machine_index)
+                cred_index = np.random.randint(0, gathered_creddentials_count)
+            
+                return {'connect': np.array([source_machine_index, cred_index])}
+
+        action_type = np.random.randint(1, 4)
+
+        if action_type == 3: # remote action
+
+            source_machine_index = np.random.choice(infected_machine_index)
+            target_machine_candidates = [i for i in range(discovered_machine_count) if i != source_machine_index]
+
+            if len(target_machine_candidates) > 0:
+
+                target_machine_index = np.random.choice(target_machine_candidates)
+                attack_index = self.__remote_attack_index[np.random.randint(0, self.__remote_attack_count)]
+            
+                return {'remote': np.array([source_machine_index, target_machine_index, attack_index])}
+        
+        action_type = np.random.randint(1, 3)
+
+        if action_type == 1: #do nothing
+
+            return {'submarine': None}
+        
+        if action_type == 2: # local action
+
+            machine_index = np.random.choice(infected_machine_index)
+            attack_index = self.__local_attack_index[np.random.randint(0, self.__local_attack_count)]
+        
+            return {'local': np.array([machine_index, attack_index])}
+

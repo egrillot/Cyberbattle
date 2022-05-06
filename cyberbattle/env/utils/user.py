@@ -339,7 +339,7 @@ class EnvironmentProfiles:
 
             for j in range(nb_profile):
 
-                p = profile.__class__(self.nb_profile + 1)
+                p = profile.__class__(nb_profile)
                 p.set_instance_name(profile.get_name() + '_' + str(j+1))
                 p.set_PC(total_available_PC[given_PC_count])
                 p.check_policy(machines)
@@ -369,7 +369,7 @@ class EnvironmentProfiles:
 
             for data_source in data_sources:
 
-                res += [ds.split(':')[0] for ds in data_source.get_actions()]
+                res += data_source.get_actions()
         
         return list(set(res))
     

@@ -46,7 +46,7 @@ rights_link = {
 }
 
 
-class ActionType(IntEnum):
+class ActionType:
     """Defines how to operate the action."""
 
     LOCAL = 0
@@ -367,7 +367,7 @@ class AttackSet:
 
     def get_data_sources(self) -> List[str]:
         """Return the data source used within the attack set."""
-        return set([ds.split(':')[0] for ds in self.data_sources])
+        return self.data_sources
 
     def get_attacks(self) -> List[Attack]:
         """Return the attack list."""
