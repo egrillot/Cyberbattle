@@ -60,13 +60,13 @@ class Escalation(Outcome):
 class LeakedMachineIP(Outcome):
     """LeakedMachineIP class."""
 
-    def __init__(self, machine_ip: List[int], absolute_value: int=0, required_right: Right=None, flag: bool=False) -> None:
+    def __init__(self, machine_ip: List[str], absolute_value: int=0, required_right: Right=None, flag: bool=False) -> None:
         """Init."""
         self.machine_ip = machine_ip
         phase_name = "discovery"
         super().__init__(phase_name, absolute_value, required_right, flag)
     
-    def get(self) -> Tuple[List[int], bool]:
+    def get(self) -> Tuple[List[str], bool]:
         """Return discovered machines."""
         return self.machine_ip, self.flag
 

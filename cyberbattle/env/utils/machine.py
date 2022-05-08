@@ -26,7 +26,8 @@ class Machine:
         is_infected: bool=False,
         data_sources: Dict[str, Dict[str, List[str]]]=dict(),
         flag: bool=False,
-        running: bool=True
+        running: bool=True,
+        properties: List[str]=None
     ):
         """Init.
         
@@ -42,7 +43,8 @@ class Machine:
         is_infected: if True, it means that the attacker is connected as a local user on the machine (bool)
         data_sources: dictionary of services offered by the machine linked to accessible data sources for each profile (Dict[str, Dict[str, List[str]]])
         flag: indicates if the attacker can catch a flag by connecting in the machine (bool)
-        running: indicates if the machine is running (bool).
+        running: indicates if the machine is running (bool)
+        properties: list of property to define the activity and the role the machine is playing in the environment (list[str]).
         """
         self.ip_adress = None
         self.outcomes = outcomes
@@ -59,6 +61,7 @@ class Machine:
         self.flag = flag
         self.running = running
         self.__running = deepcopy(running)
+        self.properties = properties
         self.attacker_right = Right(right=UserRight.LOCAL_USER) if is_infected else Right(right=UserRight.NO_ACCESS)
     
     def is_running(self) -> bool:
@@ -143,7 +146,7 @@ class Machine:
         return self.value
     
     def get_outcomes(self) -> List[Outcome]:
-        """Return outcome list."""
+        """Return the outcome list."""
         return self.outcomes
     
     def get_data_sources(self) -> Dict[str, Dict[str, List[str]]]:

@@ -56,7 +56,7 @@ def get_machine_list(num_client) -> List[Machine]:
         ] + [
             Client(instance_name='PC_{}'.format(num_client), platforms=['Windows'], connected_machines=['Switch_1'], value=0, data_sources=client_services,
             outcomes=[
-                LeakedCredentials(credentials=[Credential(port='HTTPS', machine='MailServer', profile='DSI')])
+                LeakedCredentials(credentials=[Credential(port='HTTPS', machine='MailServer', cred='DSI')])
                 ])
         ]
 
@@ -78,7 +78,7 @@ def get_machine_list(num_client) -> List[Machine]:
 
     external_servers = [
         Cloud(instance_name='GoogleDrive', platforms=['Google Workspace'], connected_machines=['Firewall_2'], value=500, data_sources=googledrive_services,
-        outcomes=[LeakedCredentials(credentials=[Credential(port='HTTPS', machine='DatabaseServer', profile='DSI')])])
+        outcomes=[LeakedCredentials(credentials=[Credential(port='HTTPS', machine='DatabaseServer', cred='DSI')])])
     ]
 
     firewalls = [

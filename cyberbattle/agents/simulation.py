@@ -3,9 +3,6 @@
 
 import time
 import numpy as np
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 from typing import Tuple, List, Dict
 from .agent import Agent
@@ -54,6 +51,7 @@ class Simulation:
         epsilon: float,
         decrease_function,
         defender: Scaner=None,
+        verbose: int=1
     ) -> None:
         """Execute an epsilon greedy search to only train one agent as the attacker"""
         if epsilon < 0 or epsilon > 1:
@@ -121,6 +119,8 @@ class Simulation:
 
             for iteration in range(1, max_iteration + 1):
 
+                time.sleep(0.01)
+
                 p = np.random.random()
 
                 if p <= epsilon:
@@ -137,7 +137,7 @@ class Simulation:
 
                         action = attacker.explore(self.environment)
                         action_type = 'exploit -> explore'
-
+                        
                 env_done, reward = self.environment.attacker_step(action)
                 decision = list(action.keys())[0]
 
@@ -167,13 +167,32 @@ class Simulation:
                 
                 attacker.learn()
                 total_reward += reward
-                values = {
-                    'cumulate rewards': total_reward,
-                    'sucessfull action': successfull_action,
-                    'failed action': failed_action,
-                    'infected machine count': len(self.environment.get_infected_machine())
-                }
-                bar.update(values, iteration-1)
+
+                if verbose > 0:
+
+                    if verbose == 1:
+
+                        values = {
+                            'cumulate rewards': total_reward,
+                            'sucessfull actions count': successfull_action,
+                            'failed actions count': failed_action,
+                            'infected machines count': len(self.environment.get_infected_machines())
+                        }
+                    
+                    if verbose == 2:
+
+                        values = {
+                            'cumulate rewards': total_reward,
+                            'sucessfull action': successfull_action,
+                            'failed action': failed_action,
+                            'discovered machines': self.environment.get_discovered_machines(),
+                            'infected machines count': len(self.environment.get_infected_machines()),
+                            'infected machines': self.environment.get_infected_machines(),
+                            'leaked credentials': self.environment.get_leaked_credentials()
+                        }
+
+                    bar.update(values, iteration-1)
+
                 all_rewards.append(reward)
 
                 if env_done:
@@ -190,8 +209,12 @@ class Simulation:
         
             all_epochs_rewards.append(all_rewards)
             all_history.append(history)
-            bar.update(values, max_iteration)
-            print(f"\nTotal reward : {total_reward}, epoch ended at {iteration} iterations.\n\n###################\n")
+
+            if verbose > 0:
+
+                bar.update(values, max_iteration)
+
+            print(f"\nEpoch ended at {iteration} iterations.\n\n###################\n")
 
         self.simulations_result[self.nb_simulation] = (all_epochs_rewards, all_history)
         self.trained_agents[self.nb_simulation] = (attacker, None)
@@ -225,7 +248,7 @@ class Simulation:
         decrease_function=exponential_espilon_decrease(epsilon_min=0.01, exponential_decay=1000),
         attacker: Agent=None,
         defender: Agent=None,
-        plot_results: bool=True
+        verbose: int=1
     ) -> None:
         """Run the simulation to train one or two agents with respect to the compilation.
         
@@ -236,7 +259,7 @@ class Simulation:
         decreade_function: if the selected training method is espilon greedy search, it refers to the used function to update the epsilon through iterations, default value is the function exponential_espilon_decrease available in cyberbattle.utils.functions with default parameters epsilon_min=0.01 and exponential_decay=1000 (function)
         attacker: the agent to train as attacker, default value : None (Agent)
         defender: the agent to train as defender, default value : None (Agent)
-        plot_results: whether the training plot must be displayed or not, default value : True (bool).
+        verbose: level of informations given by the progress bar during the training, if 0 nothing is displayed, if 1 the progress bar will return for both agents : the current cumulative reward, the failed and successfull action count and the infected mahine countand if 2, the progress bar will also display the current infected and discovered machine by the attacker and the credentials that have leaked (int).
         """
         if not self.simulation_type:
             raise ValueError("Before running the simulation please use method : compile to precise what simulation type : {self.simulation_types} and what training method : {self.training_methods} you want to use.")
@@ -253,14 +276,16 @@ class Simulation:
                     defender = None
                     print(f"You compiled with a simulation type : {self.simulation_type} so the defender change has been changed to None. Moreover, if you want to put a defence algorithm against the attacker, you can choose to assign to the defender variable an instance of Scaner available in cyberbattle.agents.defender.baseline.scan .")
 
-                self.epsilon_greedy_search_solo_attacker(attacker=attacker, defender=defender, max_iteration=max_iteration, epochs=epochs, epsilon=epsilon, decrease_function=decrease_function)
+                self.epsilon_greedy_search_solo_attacker(attacker=attacker, defender=defender, max_iteration=max_iteration, epochs=epochs, epsilon=epsilon, decrease_function=decrease_function, verbose=verbose)
 
-                if plot_results:
+                if verbose > 0:
 
                     plot_epsilon_greedy_search_result_attacker_alone(
                         simulation_result=self.simulations_result[self.nb_simulation - 1],
                         simulation_description=self.simulations_description[self.nb_simulation - 1]
                     )
 
-                    print("Last attack details :\n")
-                    self.environment.display_attacker_history()
+                    if verbose == 2:
+
+                        print("Details of a sample attack :\n")
+                        self.environment.display_attacker_history()

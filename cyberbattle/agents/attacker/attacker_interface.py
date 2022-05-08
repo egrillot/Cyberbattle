@@ -7,13 +7,50 @@ import pandas as pd
 import random
 import time
 
+
 from typing import Dict, List, Tuple
+from gym import spaces
+
 from ...vulnerabilities.attacks import Attack, ActionType
 from ...env.utils.network import Network
 from ...env.utils.machine import Machine, get_machines_by_name, trouble
 from ...vulnerabilities.outcomes import LeakedCredentials, LeakedMachineIP, Reconnaissance, Collection, Escalation, LateralMove
 from ...env.utils.user import Activity
 from ...env.utils.flow import Error, Credential
+
+
+class DiscriminateSpaces(spaces.Dict):
+    """DiscriminateSpaces class.
+    
+    This class allow us to create an action space for the attacker that will be use to sample a random valid action. 
+    Instead of the clasic spaces.Dict sampling which sample over each space, we sample only on one space.
+    The aim here is also to avoid to genereate uniformly an action type but instead of that, generate an action type with respect to the spaces dimension.
+    """
+
+    def __init__(self, spaces: Dict[str, spaces.MultiDiscrete], **spaces_kwargs) -> None:
+        """Init."""
+        self.spaces = spaces
+        self.dims: Dict[str, float] = dict([(name, np.prod(space.nvec)) for name, space in self.spaces.items()])
+        super().__init__(spaces, **spaces_kwargs)
+
+    def nvec(self) -> Dict[str, float]:
+        """Return the dimension for each space in the dictionnary."""
+        return self.dims
+    
+    def sample_action_type(self, range_action_type: List[str]) -> str:
+        """Sample an action type from the provided action types with respect to the spaces proportion."""
+        if not set(range_action_type).issubset(set(self.spaces.keys())):
+            raise ValueError(f"Please provide action types from the following list : {list(self.spaces.keys())}. Provided action types : {range_action_type}.")
+        
+        new_spaces_dims_dict = np.zeros((len(range_action_type), ))
+
+        for i, action_type in enumerate(range_action_type):
+            
+            new_spaces_dims_dict[i] = self.dims[action_type]
+        
+        new_spaces_dims_dict /= np.sum(new_spaces_dims_dict)
+
+        return np.random.choice(range_action_type, p=new_spaces_dims_dict)
 
 
 class Reward:
@@ -53,7 +90,7 @@ class AttackerGoal:
 class MachineActivityHistory:
     """MachineActivityHistory class to get an history of the attacker activities on the machine."""
 
-    def __init__(self, last_connection: float=None, attacks: Dict[int, List[Tuple[bool, float]]]=dict()) -> None:
+    def __init__(self, last_connection: float=None, attacks: Dict[int, List[Tuple[bool, float]]]=dict(), discovered_properties: List[str]=[]) -> None:
         """Init.
         
         attacks: dictionnary that associate for each done attack id a tuple that refers to if the attack was successfull and when did the attacker performed it (Dict[int, Tuple[bool, float]])
@@ -61,24 +98,36 @@ class MachineActivityHistory:
         """
         self.attacks = attacks
         self.last_connection = last_connection
+        self.discovered_properties = discovered_properties
     
     def set_last_connection(self, time_connection: float) -> None:
         """Set the last connection time."""
         self.last_connection = time_connection
     
-    def update_attacks(self, attack_id: int, success: bool, attack_type: ActionType) -> bool:
-        """Update the activity history and return whether the attack was already execute before or not."""
+    def update_attacks(self, attack_id: int, success: bool) -> bool:
+        """Update the activity history and return whether the attack was already rewarded before or not."""
         if attack_id not in self.attacks:
 
-            self.attacks[attack_id] = [(success, attack_type)]
+            self.attacks[attack_id] = [success]
 
             return False
         
         else:
 
-            self.attacks[attack_id].append((success, attack_type))
+            self.attacks[attack_id].append(success)
 
-            return True
+            if success or (True in self.attacks[attack_id]):
+
+                return True
+
+            return False
+    
+    def add_properties(self, discovered_properties: List[str]) -> int:
+        """Add the discovered properties and return the number of unknown properties that have been discovered."""
+        new_properties = [p for p in discovered_properties if p not in self.discovered_properties]
+        self.discovered_properties += new_properties
+
+        return len(new_properties)
 
 
 class Attacker:
@@ -97,18 +146,18 @@ class Attacker:
         attacks: dictionnary that links a choosen index by the attacker agent to an attack (Dict[int, Attack]),
         network: the network structure (Network),
         attacks_by_machine: dictionnary that links a machine instance name to the executable attacks on it (Dict[str, List[Attack]]),
-        start_time: (float).
+        start_time: the simulation starting time (float).
         """
         self.goals = goals
         self.__discovered_machines: Dict[str, MachineActivityHistory] = dict()
         self.__attacks = attacks
         self.__local_attack_index = [i for i, a in attacks.items() if a.get_type() == ActionType.LOCAL]
-        self.__local_attack_count = len(self.__local_attack_index)
         self.__remote_attack_index = [i for i, a in attacks.items() if a.get_type() == ActionType.REMOTE]
-        self.__remote_attack_count = len(self.__remote_attack_index)
+        self.__found_properties: List[str]= []
         self.__found_credential: List[Credential] = []
         self.__network = network
         self.__attacks_by_machine = attacks_by_machine
+        
         self.__start_time = start_time
         self.__captured_flag = 0
         self.__reward = 0
@@ -129,7 +178,22 @@ class Attacker:
     
     def instance_name_by_index(self, index: int) -> str:
         """Return the machine instance name that corresponds to the index."""
+        if index >= len(self.__discovered_machines):
+            raise ValueError(f"The provided index : {index} is higher than the discovered machines count : {len(self.__discovered_machines)}.")
+
         return list(self.__discovered_machines.keys())[index]
+    
+    def get_local_attacks_count(self) -> int:
+        """Return the local attacks count."""
+        return len(self.__local_attack_index)
+
+    def get_remote_attacks_count(self) -> int:
+        """Return the remote attacks count."""
+        return len(self.__remote_attack_index)
+    
+    def get_machine_tracker(self, machine: str) -> MachineActivityHistory:
+        """Return the activity tracker of the provided machine."""
+        return self.__discovered_machines[machine]
 
     def get_discovered_machines(self) -> List[str]:
         """Return the discovered machines and their associated activity history."""
@@ -147,6 +211,13 @@ class Attacker:
         """Return the cumulative reward."""
         return np.cumsum(np.array(self.__cumulative_reward))
     
+    def add_new_properties(self, discovered_properties: List[str]) -> int:
+        """Add new properties and return the number of unknown properties that have been discovered."""
+        new_properties = [p for p in discovered_properties if p not in self.__found_properties]
+        self.__found_properties += new_properties
+
+        return len(new_properties)
+    
     def get_total_reward(self) -> float:
         """Return the cumulative reward."""
         return self.__reward
@@ -156,7 +227,8 @@ class Attacker:
         for name in instance_names:
 
             self.__discovered_machines[name] = MachineActivityHistory(
-                last_connection=self.__start_time
+                last_connection=self.__start_time,
+
             )
         
     def is_discovered(self, machine: str):
@@ -187,35 +259,31 @@ class Attacker:
         instance_name = machine.get_instance_name()
         attack_id = attack.get_id()
         type_attack = attack.get_type()
+        type = 'remote' if type_attack == ActionType.REMOTE else 'local'
         reward = 0
-        
+
         if (attack_id not in [a.get_id() for a in self.__attacks_by_machine[instance_name]]) or (not machine.is_running()):
 
-            if self.__discovered_machines[instance_name].update_attacks(attack_id, False, type_attack):
-
-                reward += Reward.repeat_attack
-            
             reward += Reward.failed_attack
+            self.update_history(time.time(), reward, attack.get_name(), instance_name, 'failed', type, False, self.step_count)
 
             return False, reward, False
 
         attack_phase_names = attack.get_outcomes()
+        
+        already_get_rewarded = self.__discovered_machines[instance_name].update_attacks(attack_id, True)
 
         for phase_name in attack_phase_names:
 
             outcomes = machine.get_outcome(phase_name)
 
-            already_done = self.__discovered_machines[instance_name].update_attacks(attack_id, True, type_attack)
-
-            if already_done:
+            if already_get_rewarded:
                 
                 reward += Reward.repeat_attack
             
             for outcome in outcomes:
 
-                if not already_done:
-
-                    reward += outcome.get_absolute_value()
+                reward += outcome.get_absolute_value()
 
                 if isinstance(outcome, LeakedCredentials):
 
@@ -267,7 +335,9 @@ class Attacker:
                         reward += Reward.escalation
 
                     machine.update_attacker_right(user_right)
-        
+
+        self.update_history(time.time(), reward, attack.get_name(), instance_name, 'successfull', type, flag, self.step_count)
+
         return True, reward, flag
     
     def execute_local_action(self, attacker_action: np.ndarray) -> Tuple[float, bool, Activity]:
@@ -284,12 +354,11 @@ class Attacker:
         if not self.__discovered_machines[machine_instance_name].last_connection:
 
             reward = Reward.failed_attack
-            self.update_history(time.time(), reward, attack.get_name(), machine_instance_name, 'failed', 'local', False, self.step_count)
 
             return reward, False, Activity()
 
         machine = get_machines_by_name(machine_instance_name, self.__network.get_machine_list())[0]
-        
+
         is_successfull, reward, flag = self.get_attack_outcome(attack, machine)
 
         if is_successfull:
@@ -304,12 +373,8 @@ class Attacker:
                 service=port,
                 error=Error.NO_ERROR
             )
-            
-            self.update_history(time.time(), reward, attack.get_name(), machine.get_instance_name(), 'successfull', 'local', flag, self.step_count)
 
             return reward, flag, activity
-        
-        self.update_history(time.time(), reward, attack.get_name(), machine.get_instance_name(), 'failed', 'local', flag, self.step_count)
         
         return reward, flag, Activity()
 
@@ -327,11 +392,11 @@ class Attacker:
         if target not in self.__discovered_machines:
             raise ValueError(f"The machine {target} isn't discovered yet.")
 
+        attack = self.__attacks[attacker_action[2]]
+
         if not self.__discovered_machines[source].last_connection:
 
             return Reward.failed_attack, False, Activity()
-
-        attack = self.__attacks[attacker_action[2]]
 
         if attack.get_type() == ActionType.LOCAL:
             raise ValueError("To execute a remote action, you need to used an attack with a remote type.")
@@ -365,7 +430,7 @@ class Attacker:
                     error=error
                 )
 
-                self.update_history(time.time(), 0, attack.get_name(), target, 'network failed', 'remote', False)
+                self.update_history(time.time(), 0, attack.get_name(), target, 'network failed', 'remote', False, self.step_count)
 
                 return 0, False, activity
 
@@ -382,11 +447,7 @@ class Attacker:
                     error=Error.NO_ERROR
                 )
 
-                self.update_history(time.time(), reward, attack.get_name(), target, 'successfull', 'remote', flag, self.step_count)
-
                 return reward, flag, activity
-
-            self.update_history(time.time(), reward, attack.get_name(), target, 'failed', 'remote', flag, self.step_count)
 
             return reward, flag, Activity()
     
@@ -468,7 +529,7 @@ class Attacker:
     def on_step(self, attacker_action: Dict[str, np.ndarray]) -> Tuple[float, Activity]:
         """Return the attacker activity."""
         if 'connect' in attacker_action:
-
+            
             reward, flag, activity = self.connect(attacker_action['connect'])
 
         elif 'submarine' in attacker_action:
@@ -510,6 +571,7 @@ class Attacker:
         self.__start_time = new_start_time
         self.__captured_flag = 0
         self.__reward = 0
+        self.__found_properties: List[str] = []
         self.__cumulative_reward = []
         self.step_count = 1        
         self.history: Dict[str, List[object]] = {
@@ -539,9 +601,8 @@ class Attacker:
 
         return self.history
     
-    def sample_random_valid_action(self) -> Dict[str, np.ndarray]:
+    def sample_random_valid_action(self, spaces: DiscriminateSpaces) -> Dict[str, np.ndarray]:
         """Sample a random action that the attacker is able to perform."""
-        action_type = np.random.randint(0, 4)
         infected_machine_index = []
 
         for i, (_, tracker) in enumerate(self.__discovered_machines.items()):
@@ -551,42 +612,53 @@ class Attacker:
                 infected_machine_index.append(i)
         
         discovered_machine_count = len(self.__discovered_machines)
+        gathered_creddentials_count = len(self.__found_credential)
 
-        if action_type == 0: # connect action
+        range_index = ['connect', 'submarine', 'local', 'remote']
 
-            gathered_creddentials_count = len(self.__found_credential)
+        if gathered_creddentials_count == 0:
 
-            if gathered_creddentials_count > 0:
+            range_index.remove('connect')
 
-                source_machine_index = np.random.choice(infected_machine_index)
-                cred_index = np.random.randint(0, gathered_creddentials_count)
-            
-                return {'connect': np.array([source_machine_index, cred_index])}
+        action_type = spaces.sample_action_type(range_index)
 
-        action_type = np.random.randint(1, 4)
+        if action_type == 'connect':
 
-        if action_type == 3: # remote action
+            source_machine_index = np.random.choice(infected_machine_index)
+            cred_index = np.random.randint(0, gathered_creddentials_count)
+        
+            return {'connect': np.array([source_machine_index, cred_index])}
+
+        if action_type == 'remote':
 
             source_machine_index = np.random.choice(infected_machine_index)
             target_machine_candidates = [i for i in range(discovered_machine_count) if i != source_machine_index]
-
-            if len(target_machine_candidates) > 0:
-
-                target_machine_index = np.random.choice(target_machine_candidates)
-                attack_index = self.__remote_attack_index[np.random.randint(0, self.__remote_attack_count)]
-            
-                return {'remote': np.array([source_machine_index, target_machine_index, attack_index])}
+            target_machine_index = np.random.choice(target_machine_candidates)
+            attack_index = np.random.choice(self.__remote_attack_index)
         
-        action_type = np.random.randint(1, 3)
+            return {'remote': np.array([source_machine_index, target_machine_index, attack_index])}
 
-        if action_type == 1: #do nothing
+        if action_type == 'submarine': 
 
             return {'submarine': None}
         
-        if action_type == 2: # local action
+        if action_type == 'local':
 
             machine_index = np.random.choice(infected_machine_index)
-            attack_index = self.__local_attack_index[np.random.randint(0, self.__local_attack_count)]
+            attack_index = np.random.choice(self.__local_attack_index)
         
             return {'local': np.array([machine_index, attack_index])}
 
+    def successfull_actions_count(self, machine: str, window: int) -> int:
+        """Return how much actions have been successfull on the provided machine as target."""
+        results = np.array(self.history['result'])[-window:]
+        machines_instance_name = np.array(self.history['machine instance name'])[-window:]  
+
+        return sum([1 for result, machine_instance_name in zip(results, machines_instance_name) if ( machine_instance_name == machine ) and ( result == 'successfull' )])
+
+    def failed_actions_count(self, machine: str, window: int) -> int:
+        """Return how much actions have been failed on the provided machine as target."""
+        results = np.array(self.history['result'])[-window:]
+        machines_instance_name = np.array(self.history['machine instance name'])[-window:]  
+
+        return sum([1 for result, machine_instance_name in zip(results, machines_instance_name) if ( machine_instance_name == machine ) and ( result != 'successfull' )])
