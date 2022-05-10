@@ -64,13 +64,14 @@ class Reward:
     connection = 50
     flag_captured = 50
     escalation = 10
+    waiting = -1
 
 class AttackerGoal:
     """Define the attacker goal during the simulation."""
 
     def __init__(
         self,
-        reward: float=0,
+        reward: float=10000,
         nb_flag: int=0
     ) -> None:
         """Init.
@@ -84,50 +85,7 @@ class AttackerGoal:
     
     def is_reached(self, total_rewards: float, total_flags: int) -> bool:
         """Return wheither goals are reached or not."""
-        return (total_rewards >= self.reward) and (total_flags >= self.nb_flag)
-
-
-class MachineActivityHistory:
-    """MachineActivityHistory class to get an history of the attacker activities on the machine."""
-
-    def __init__(self, last_connection: float=None, attacks: Dict[int, List[Tuple[bool, float]]]=dict(), discovered_properties: List[str]=[]) -> None:
-        """Init.
-        
-        attacks: dictionnary that associate for each done attack id a tuple that refers to if the attack was successfull and when did the attacker performed it (Dict[int, Tuple[bool, float]])
-        last_connection: last time the attacker connected himself on the machine (float).
-        """
-        self.attacks = attacks
-        self.last_connection = last_connection
-        self.discovered_properties = discovered_properties
-    
-    def set_last_connection(self, time_connection: float) -> None:
-        """Set the last connection time."""
-        self.last_connection = time_connection
-    
-    def update_attacks(self, attack_id: int, success: bool) -> bool:
-        """Update the activity history and return whether the attack was already rewarded before or not."""
-        if attack_id not in self.attacks:
-
-            self.attacks[attack_id] = [success]
-
-            return False
-        
-        else:
-
-            self.attacks[attack_id].append(success)
-
-            if success or (True in self.attacks[attack_id]):
-
-                return True
-
-            return False
-    
-    def add_properties(self, discovered_properties: List[str]) -> int:
-        """Add the discovered properties and return the number of unknown properties that have been discovered."""
-        new_properties = [p for p in discovered_properties if p not in self.discovered_properties]
-        self.discovered_properties += new_properties
-
-        return len(new_properties)
+        return (total_rewards >= self.reward) or (total_flags >= self.nb_flag)
 
 
 class Attacker:
@@ -138,7 +96,8 @@ class Attacker:
         attacks: Dict[int, Attack],
         network: Network,
         attacks_by_machine: Dict[str, List[Attack]],
-        start_time: float
+        start_time: float,
+        credentials: List[str]
     ) -> None:
         """Init.
         
@@ -146,13 +105,23 @@ class Attacker:
         attacks: dictionnary that links a choosen index by the attacker agent to an attack (Dict[int, Attack]),
         network: the network structure (Network),
         attacks_by_machine: dictionnary that links a machine instance name to the executable attacks on it (Dict[str, List[Attack]]),
-        start_time: the simulation starting time (float).
+        start_time: the simulation starting time (float)
+        credentials: List of available credentials in the environment (List[str]).
         """
         self.goals = goals
-        self.__discovered_machines: Dict[str, MachineActivityHistory] = dict()
+        self.__discovered_machines: List[str] = []
+        self.__last_connections: Dict[str, float] = dict()
+        self.__attacks_tried: Dict[str, Dict[int, bool]] = dict()
         self.__attacks = attacks
         self.__local_attack_index = [i for i, a in attacks.items() if a.get_type() == ActionType.LOCAL]
         self.__remote_attack_index = [i for i, a in attacks.items() if a.get_type() == ActionType.REMOTE]
+        self.__attacks_name_to_id = dict([(a.get_name(), i) for i, a in attacks.items()])
+        nb_attack = len(self.__attacks_name_to_id)
+
+        for i, cred in enumerate(credentials):
+
+            self.__attacks_name_to_id[cred] = nb_attack + i
+
         self.__found_properties: List[str]= []
         self.__found_credential: List[Credential] = []
         self.__network = network
@@ -171,7 +140,8 @@ class Attacker:
             'reward': [],
             'result': [],
             'type': [],
-            'flag': []
+            'flag': [],
+            'cumulative reward': []
         }
 
         self.set_positions([m.get_instance_name() for m in network.get_machine_list() if m.is_infected])
@@ -181,7 +151,7 @@ class Attacker:
         if index >= len(self.__discovered_machines):
             raise ValueError(f"The provided index : {index} is higher than the discovered machines count : {len(self.__discovered_machines)}.")
 
-        return list(self.__discovered_machines.keys())[index]
+        return self.__discovered_machines[index]
     
     def get_local_attacks_count(self) -> int:
         """Return the local attacks count."""
@@ -190,14 +160,10 @@ class Attacker:
     def get_remote_attacks_count(self) -> int:
         """Return the remote attacks count."""
         return len(self.__remote_attack_index)
-    
-    def get_machine_tracker(self, machine: str) -> MachineActivityHistory:
-        """Return the activity tracker of the provided machine."""
-        return self.__discovered_machines[machine]
 
     def get_discovered_machines(self) -> List[str]:
         """Return the discovered machines and their associated activity history."""
-        return list(self.__discovered_machines.keys())
+        return self.__discovered_machines
     
     def goals_description(self) -> str:
         """Describe the attacker goals."""
@@ -226,10 +192,9 @@ class Attacker:
         """Set machines where the attacker is initially connected."""
         for name in instance_names:
 
-            self.__discovered_machines[name] = MachineActivityHistory(
-                last_connection=self.__start_time,
-
-            )
+            self.__discovered_machines.append(name)
+            self.__last_connections[name] = self.__start_time
+            self.__attacks_tried[name] = dict()
         
     def is_discovered(self, machine: str):
         """Return whether a machine has been discovered or not."""
@@ -249,10 +214,11 @@ class Attacker:
         self.history['type'].append(type)
         self.history['flag'].append(flag)
         self.history['iteration'].append(step)
+        self.history['cumulative reward'].append(sum(self.history['reward']))
 
     def get_infected_machines(self) -> List[Tuple[str, float]]:
         """Return the infected machine instance name with the last connection time."""
-        return [(instance_name, self.__discovered_machines[instance_name].last_connection - self.__start_time) for instance_name in self.__discovered_machines if self.__discovered_machines[instance_name].last_connection]
+        return [(instance_name, self.__last_connections[instance_name] - self.__start_time) for instance_name in self.__discovered_machines if self.__last_connections[instance_name]]
     
     def get_attack_outcome(self, attack: Attack, machine: Machine) -> Tuple[bool, float, bool]:
         """Return whether the attack has been performed successfully, the reward executing it on the machine and whether a flag has been captured or not."""
@@ -265,13 +231,26 @@ class Attacker:
         if (attack_id not in [a.get_id() for a in self.__attacks_by_machine[instance_name]]) or (not machine.is_running()):
 
             reward += Reward.failed_attack
+
+            if self.__attacks_name_to_id[attack.get_name()] not in self.__attacks_tried[instance_name]:
+
+                self.__attacks_tried[instance_name][self.__attacks_name_to_id[attack.get_name()]] = False
+
             self.update_history(time.time(), reward, attack.get_name(), instance_name, 'failed', type, False, self.step_count)
 
             return False, reward, False
 
         attack_phase_names = attack.get_outcomes()
         
-        already_get_rewarded = self.__discovered_machines[instance_name].update_attacks(attack_id, True)
+        if self.__attacks_name_to_id[attack.get_name()] in self.__attacks_tried[instance_name]:
+
+            already_get_rewarded = self.__attacks_tried[instance_name][self.__attacks_name_to_id[attack.get_name()]]
+        
+        else:
+
+            already_get_rewarded = False
+
+        self.__attacks_tried[instance_name][self.__attacks_name_to_id[attack.get_name()]] = True
 
         for phase_name in attack_phase_names:
 
@@ -283,7 +262,9 @@ class Attacker:
             
             for outcome in outcomes:
 
-                reward += outcome.get_absolute_value()
+                if not already_get_rewarded:
+
+                    reward += outcome.get_absolute_value()
 
                 if isinstance(outcome, LeakedCredentials):
 
@@ -298,7 +279,9 @@ class Attacker:
 
                             if machine_instance_name not in self.__discovered_machines:
 
-                                self.__discovered_machines[machine_instance_name] = MachineActivityHistory()
+                                self.__discovered_machines.append(machine_instance_name)
+                                self.__last_connections[machine_instance_name] = None
+                                self.__attacks_tried[machine_instance_name] = dict()
                                 reward += Reward.discovered_machineIP
 
                             reward += Reward.discovered_credential
@@ -311,7 +294,9 @@ class Attacker:
 
                         if discovered_machine not in self.__discovered_machines:
 
-                            self.__discovered_machines[discovered_machine] = MachineActivityHistory()
+                            self.__discovered_machines.append(discovered_machine)
+                            self.__last_connections[discovered_machine] = None
+                            self.__attacks_tried[discovered_machine] = dict()
                             reward += Reward.discovered_machineIP
                 
                 elif isinstance(outcome, LateralMove):
@@ -336,6 +321,7 @@ class Attacker:
 
                     machine.update_attacker_right(user_right)
 
+        self.__attacks_tried[instance_name][self.__attacks_name_to_id[attack.get_name()]] = True
         self.update_history(time.time(), reward, attack.get_name(), instance_name, 'successfull', type, flag, self.step_count)
 
         return True, reward, flag
@@ -351,7 +337,11 @@ class Attacker:
         if attack.get_type() == ActionType.REMOTE:
             raise ValueError("To execute a local action, you need to used an attack with a local type.")
         
-        if not self.__discovered_machines[machine_instance_name].last_connection:
+        if not self.__last_connections[machine_instance_name]:
+
+            if self.__attacks_name_to_id[attack.get_name()] not in self.__attacks_tried[machine_instance_name]:
+
+                self.__attacks_tried[machine_instance_name][self.__attacks_name_to_id[attack.get_name()]] = False
 
             reward = Reward.failed_attack
 
@@ -394,7 +384,11 @@ class Attacker:
 
         attack = self.__attacks[attacker_action[2]]
 
-        if not self.__discovered_machines[source].last_connection:
+        if not self.__last_connections[source]:
+            
+            if self.__attacks_name_to_id[attack.get_name()] not in self.__attacks_tried[target]:
+
+                self.__attacks_tried[target][self.__attacks_name_to_id[attack.get_name()]] = False
 
             return Reward.failed_attack, False, Activity()
 
@@ -410,6 +404,7 @@ class Attacker:
         if len(ports_and_actions) == 0:
 
             reward = Reward.failed_attack
+            self.__attacks_tried[target][self.__attacks_name_to_id[attack.get_name()]] = False
             self.update_history(time.time(), reward, attack.get_name(), target, 'failed', 'remote', False, self.step_count)
 
             return reward, False, Activity()
@@ -429,6 +424,10 @@ class Attacker:
                     service=port,
                     error=error
                 )
+
+                if self.__attacks_name_to_id[attack.get_name()] not in self.__attacks_tried[target]:
+
+                    self.__attacks_tried[target][self.__attacks_name_to_id[attack.get_name()]] = False
 
                 self.update_history(time.time(), 0, attack.get_name(), target, 'network failed', 'remote', False, self.step_count)
 
@@ -454,19 +453,19 @@ class Attacker:
     def connect(self, attacker_action: np.ndarray) -> Tuple[float, bool, Activity]:
         """Connect."""
         source = self.instance_name_by_index(attacker_action[0])
+        credential = self.__found_credential[attacker_action[1]]
 
         if source not in self.__discovered_machines:
             raise ValueError(f"The machine {source} isn't discovered yet.")
 
-        if not self.__discovered_machines[source].last_connection:
+        target = credential.machine
+
+        if not self.__last_connections[source]:
 
             reward = Reward.failed_attack
             self.update_history(time.time(), reward, 'User Account Authentification', target, 'failed', 'connect', False, self.step_count)
 
             return reward, False, Activity()
-        
-        credential = self.__found_credential[attacker_action[1]]
-        target = credential.machine
 
         if target not in self.__discovered_machines:
             raise ValueError(f"The machine {target} isn't discovered yet.")
@@ -476,9 +475,9 @@ class Attacker:
 
         if isinstance(path, int):
 
-            if self.__discovered_machines[target].last_connection:
+            if self.__last_connections[target]:
 
-                self.__discovered_machines[target].last_connection = time.time()
+                self.__last_connections[target] = time.time()
                 reward = Reward.repeat_attack
                 self.update_history(time.time(), reward, 'User Account Authentification', target, 'repeat', 'connect', False, self.step_count)
 
@@ -497,6 +496,10 @@ class Attacker:
                 error=error
             )
 
+            if self.__attacks_name_to_id[credential.cred] not in self.__attacks_tried[target]:
+
+                self.__attacks_tried[target][self.__attacks_name_to_id[credential.cred]] = False
+
             self.update_history(time.time(), 0, 'User Account Authentification', target, 'network failed', 'connect', False, self.step_count)
 
             return 0, False, activity
@@ -504,9 +507,9 @@ class Attacker:
         reward = 0
         flag = False
 
-        if not self.__discovered_machines[target].last_connection:
+        if not self.__last_connections[target]:
             
-            self.__discovered_machines[target].last_connection = time.time()
+            self.__last_connections[target] = time.time()
             reward += Reward.connection
             target_machine = path[-1]
             reward += target_machine.get_value()
@@ -522,6 +525,7 @@ class Attacker:
                 error=error
         )
 
+        self.__attacks_tried[target][self.__attacks_name_to_id[credential.cred]] = True
         self.update_history(time.time(), reward, 'User Account Authentification', target, 'successfull', 'connect', flag, self.step_count)
         
         return reward, flag, activity
@@ -534,7 +538,7 @@ class Attacker:
 
         elif 'submarine' in attacker_action:
 
-            return 0, Activity()
+            return Reward.waiting, Activity()
         
         elif 'local' in attacker_action:
 
@@ -547,9 +551,8 @@ class Attacker:
         if flag:
 
             self.__captured_flag += 1
-        
+
         self.__reward += reward
-        self.__cumulative_reward.append(reward)
         self.step_count += 1
         
         return reward, activity
@@ -566,13 +569,14 @@ class Attacker:
         """Reset the attacker attributes."""
 
         self.__found_credential: List[Credential] = []
-        self.__discovered_machines: Dict[str, MachineActivityHistory] = dict()
+        self.__discovered_machines: List[str] = []
+        self.__last_connections: Dict[str, float] = dict()
+        self.__attacks_tried: Dict[str, Dict[int, float]] = dict()
         self.__network.reset()
         self.__start_time = new_start_time
         self.__captured_flag = 0
         self.__reward = 0
         self.__found_properties: List[str] = []
-        self.__cumulative_reward = []
         self.step_count = 1        
         self.history: Dict[str, List[object]] = {
             'time': [],
@@ -582,14 +586,14 @@ class Attacker:
             'reward': [],
             'result': [],
             'type': [],
-            'flag': []
+            'flag': [],
+            'cumulative reward': []
         }
 
         self.set_positions([m.get_instance_name() for m in self.__network.get_machine_list() if m.is_infected])
     
     def display_history(self, x='iteration') -> None:
         """Display the attacker action history through a time line."""
-        self.history['cumulative reward'] = self.get_cumulative_rewards()
         df = pd.DataFrame(self.history, columns=['time', 'iteration', 'reward', 'attack name', 'machine instance name', 'result', 'type', 'flag', 'cumulative reward'])
         fig = px.scatter(df, x=x, y='cumulative reward', color='result', symbol='type', title="Attacker history", hover_data=['time', 'iteration', 'reward', 'attack name', 'machine instance name', 'type', 'flag'])
         #fig.update_traces(mode="markers+lines")
@@ -597,17 +601,15 @@ class Attacker:
     
     def get_attacker_history(self) -> Dict[str, object]:
         """Return the attacker attack history."""
-        self.history['cumulative reward'] = self.get_cumulative_rewards()
-
         return self.history
     
     def sample_random_valid_action(self, spaces: DiscriminateSpaces) -> Dict[str, np.ndarray]:
         """Sample a random action that the attacker is able to perform."""
         infected_machine_index = []
 
-        for i, (_, tracker) in enumerate(self.__discovered_machines.items()):
+        for i, last_connection in enumerate(self.__last_connections):
             
-            if tracker.last_connection:
+            if last_connection:
 
                 infected_machine_index.append(i)
         
@@ -619,6 +621,10 @@ class Attacker:
         if gathered_creddentials_count == 0:
 
             range_index.remove('connect')
+        
+        if ( len(infected_machine_index) == 1 ) and ( discovered_machine_count == 1 ):
+
+            range_index.remove('remote')
 
         action_type = spaces.sample_action_type(range_index)
 
@@ -640,7 +646,7 @@ class Attacker:
 
         if action_type == 'submarine': 
 
-            return {'submarine': None}
+            return {'submarine': np.array([np.random.choice(infected_machine_index)])}
         
         if action_type == 'local':
 
@@ -648,17 +654,3 @@ class Attacker:
             attack_index = np.random.choice(self.__local_attack_index)
         
             return {'local': np.array([machine_index, attack_index])}
-
-    def successfull_actions_count(self, machine: str, window: int) -> int:
-        """Return how much actions have been successfull on the provided machine as target."""
-        results = np.array(self.history['result'])[-window:]
-        machines_instance_name = np.array(self.history['machine instance name'])[-window:]  
-
-        return sum([1 for result, machine_instance_name in zip(results, machines_instance_name) if ( machine_instance_name == machine ) and ( result == 'successfull' )])
-
-    def failed_actions_count(self, machine: str, window: int) -> int:
-        """Return how much actions have been failed on the provided machine as target."""
-        results = np.array(self.history['result'])[-window:]
-        machines_instance_name = np.array(self.history['machine instance name'])[-window:]  
-
-        return sum([1 for result, machine_instance_name in zip(results, machines_instance_name) if ( machine_instance_name == machine ) and ( result != 'successfull' )])

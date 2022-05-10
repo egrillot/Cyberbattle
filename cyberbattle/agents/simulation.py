@@ -41,7 +41,7 @@ class Simulation:
         self.nb_simulation = 1
         self.simulation_type = None
         self.training_method = None
-        self.trained_agents = dict()
+        self.trained_agents: Dict[str, Agent] = dict()
 
     def epsilon_greedy_search_solo_attacker(
         self,
@@ -70,6 +70,7 @@ class Simulation:
         all_epochs_rewards = []
         all_history = []
         step_count = 1
+        mean_loss = []
 
         for epoch in range(1, epochs + 1):
 
@@ -119,8 +120,6 @@ class Simulation:
 
             for iteration in range(1, max_iteration + 1):
 
-                time.sleep(0.01)
-
                 p = np.random.random()
 
                 if p <= epsilon:
@@ -165,8 +164,9 @@ class Simulation:
 
                         history[action_type] += 1
                 
-                attacker.learn()
+                attacker.learn(self.environment, reward)
                 total_reward += reward
+                loss = attacker.loss()
 
                 if verbose > 0:
 
@@ -176,7 +176,8 @@ class Simulation:
                             'cumulate rewards': total_reward,
                             'sucessfull actions count': successfull_action,
                             'failed actions count': failed_action,
-                            'infected machines count': len(self.environment.get_infected_machines())
+                            'infected machines count': len(self.environment.get_infected_machines()),
+                            'model loss': np.mean(loss) if loss is not None else None
                         }
                     
                     if verbose == 2:
@@ -188,7 +189,8 @@ class Simulation:
                             'discovered machines': self.environment.get_discovered_machines(),
                             'infected machines count': len(self.environment.get_infected_machines()),
                             'infected machines': self.environment.get_infected_machines(),
-                            'leaked credentials': self.environment.get_leaked_credentials()
+                            'leaked credentials': self.environment.get_leaked_credentials(),
+                            'model loss': np.mean(loss) if loss is not None else None
                         }
 
                     bar.update(values, iteration-1)
@@ -209,15 +211,18 @@ class Simulation:
         
             all_epochs_rewards.append(all_rewards)
             all_history.append(history)
+            mean_loss.append(np.mean(loss))
+            attacker.new_episode()
 
             if verbose > 0:
 
                 bar.update(values, max_iteration)
 
-            print(f"\nEpoch ended at {iteration} iterations.\n\n###################\n")
+            print(f"\nEpoch ended at {iteration} iterations - Exploit deflected to explore count : {history['exploit -> explore']} - Submarine action count : {history['submarine']}. \n\n###################\n")
 
-        self.simulations_result[self.nb_simulation] = (all_epochs_rewards, all_history)
+        self.simulations_result[self.nb_simulation] = (all_epochs_rewards, all_history, mean_loss)
         self.trained_agents[self.nb_simulation] = (attacker, None)
+        self.trained_agents[attacker.get_name()] = attacker
         self.nb_simulation += 1
         
     def compile(
@@ -248,7 +253,8 @@ class Simulation:
         decrease_function=exponential_espilon_decrease(epsilon_min=0.01, exponential_decay=1000),
         attacker: Agent=None,
         defender: Agent=None,
-        verbose: int=1
+        verbose: int=1,
+        sample_attack: bool=False
     ) -> None:
         """Run the simulation to train one or two agents with respect to the compilation.
         
@@ -259,7 +265,8 @@ class Simulation:
         decreade_function: if the selected training method is espilon greedy search, it refers to the used function to update the epsilon through iterations, default value is the function exponential_espilon_decrease available in cyberbattle.utils.functions with default parameters epsilon_min=0.01 and exponential_decay=1000 (function)
         attacker: the agent to train as attacker, default value : None (Agent)
         defender: the agent to train as defender, default value : None (Agent)
-        verbose: level of informations given by the progress bar during the training, if 0 nothing is displayed, if 1 the progress bar will return for both agents : the current cumulative reward, the failed and successfull action count and the infected mahine countand if 2, the progress bar will also display the current infected and discovered machine by the attacker and the credentials that have leaked (int).
+        verbose: level of informations given by the progress bar during the training, if 0 nothing is displayed, if 1 the progress bar will return for both agents : the current cumulative reward, the failed and successfull action count and the infected mahine countand if 2, the progress bar will also display the current infected and discovered machine by the attacker and the credentials that have leaked (int)
+        sample_attack: if True, an attack is run without exploring (bool).
         """
         if not self.simulation_type:
             raise ValueError("Before running the simulation please use method : compile to precise what simulation type : {self.simulation_types} and what training method : {self.training_methods} you want to use.")
@@ -284,8 +291,34 @@ class Simulation:
                         simulation_result=self.simulations_result[self.nb_simulation - 1],
                         simulation_description=self.simulations_description[self.nb_simulation - 1]
                     )
+                
+                if sample_attack:
 
-                    if verbose == 2:
+                    print("Details of a sample attack :\n")
+                    self.environment.reset()
+                    attacker = list(self.trained_agents.values())[-1]
+                    exploit_to_explore_count = 0
 
-                        print("Details of a sample attack :\n")
-                        self.environment.display_attacker_history()
+                    for _ in range(1, max_iteration + 1):
+
+                        performable, action = attacker.exploit(self.environment)
+
+                        if not performable:
+
+                            action = attacker.explore(self.environment)
+                            exploit_to_explore_count += 1
+                        
+                        env_done, _ = self.environment.attacker_step(action)
+
+                        if env_done:
+
+                            break
+                    
+                    self.environment.display_attacker_history()
+                    print(f"Number of exploit deflected to explore : {exploit_to_explore_count}.")
+    
+    def save(self, name: str, directory_path: str) -> None:
+        """Save the provided trained agent."""
+        self.trained_agents[name].save(directory_path)
+    
+

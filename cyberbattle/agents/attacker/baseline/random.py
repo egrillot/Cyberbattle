@@ -26,7 +26,7 @@ class RandomAgent(Agent):
         """Choose a random valid action."""
         return env.sample_random_valid_action_attacker()
     
-    def learn(self) -> None:
+    def learn(self, env: CyberBattleEnv, reward: float) -> None:
         return 
     
     def get_descritpion(self) -> str:

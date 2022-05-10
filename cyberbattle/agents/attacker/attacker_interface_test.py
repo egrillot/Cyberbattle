@@ -35,17 +35,17 @@ def test_attacker_interface():
     assert reward == 20
     assert set(attacker.get_discovered_machines()) == set(['PC_2', 'PC_1', 'PC_3', 'PC_4', 'PC_5'])
 
-    attack = {'local': np.array([0, 3])}
+    attack = {'local': np.array([0, 1])}
     reward, _ = attacker.on_step(attack) 
 
     assert reward == -10
 
-    attack = {'local': np.array([0, 3])}
+    attack = {'local': np.array([0, 2])}
     reward, _ = attacker.on_step(attack)
 
     assert reward == -12
 
-    attack = {'remote': np.array([0, 4, 1])}
+    attack = {'remote': np.array([0, 4, 3])}
     reward, _ = attacker.on_step(attack)
 
     assert reward == 25
@@ -63,13 +63,13 @@ def test_attacker_interface():
     assert reward == 250
     assert len(attacker.get_infected_machines()) == 2
 
-    attack = {'local': np.array([5, 3])}
+    attack = {'local': np.array([5, 2])}
     reward, _ = attacker.on_step(attack)
 
     assert reward == 13
     assert len(attacker.get_discovered_machines()) == 9
 
-    attack = {'remote': np.array([0, 5, 4])}
+    attack = {'remote': np.array([0, 5, 3])}
     reward, _ = attacker.on_step(attack)
 
     assert reward == -10
@@ -91,14 +91,16 @@ def test_attacker_interface():
 
     assert reward == 0
 
-    attack = {'local': np.array([6, 2])}
+    attack = {'local': np.array([6, 1])}
     reward, _ = attacker.on_step(attack)
 
     assert reward == 1000
 
-    for cr, expected_cr in zip(attacker.get_cumulative_rewards(), [20, 10, -2, 23, 273, 286, 276, 294, 1344, 2344]):
+    cr = attacker.get_cumulative_rewards()
+    expected_cr: np.ndarray = np.array([20, 10, -2, 23, 273, 286, 276, 294, 1344, 2344])
 
-        assert cr == expected_cr
+    assert cr.shape == expected_cr.shape
+    assert np.count_nonzero(cr - expected_cr) == 0
         
     assert attacker.reached_goals()
     

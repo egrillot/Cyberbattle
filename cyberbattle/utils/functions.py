@@ -27,3 +27,13 @@ def exponential_espilon_decrease(epsilon_min: float, exponential_decay: float):
         return (epsilon - epsilon_min) * math.exp((-1) * step_count / exponential_decay) + epsilon_min
     
     return f
+    
+
+def random_argmax(tab: np.ndarray) -> Tuple[float, int]:
+    """Return a random index among the argmax."""
+    assert len(tab.shape) == 1
+
+    max_value = np.max(tab)
+    argmax = np.where(tab == max_value)[0]
+
+    return max_value, int(np.random.choice(argmax))

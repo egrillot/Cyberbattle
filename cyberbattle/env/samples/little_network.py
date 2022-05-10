@@ -56,7 +56,7 @@ def get_machine_list(num_client) -> List[Machine]:
         ] + [
             Client(instance_name='PC_{}'.format(num_client), platforms=['Windows'], connected_machines=['Switch_1'], value=0, data_sources=client_services,
             outcomes=[
-                LeakedCredentials(credentials=[Credential(port='HTTPS', machine='MailServer', cred='DSI')])
+                LeakedCredentials(credentials=[Credential(port='HTTPS', machine='MailServer', cred='MailDSI')])
                 ])
         ]
 
@@ -71,14 +71,14 @@ def get_machine_list(num_client) -> List[Machine]:
         outcomes=[Collection(data='Confidential document', required_right=UserRight.LOCAL_USER, absolute_value=1000, flag=True)]), 
         Server(instance_name='MailServer', platforms=['IaaS'], connected_machines=['Switch_2'], value=200, data_sources=servermail_services,
         outcomes=[LeakedMachineIP(machine_ip=[
-            'DatabaseServer', 'CommunicationServer', 'GoogleDrive'], required_right=UserRight.LOCAL_USER)
+            'DatabaseServer', 'CommunicationServer', 'GoogleDrive'], required_right=UserRight.LOCAL_USER, flag=True)
             ]),
         Server(instance_name='CommunicationServer', platforms=['PRE'], connected_machines=['Switch_2'], value=200, data_sources=servermail_services) 
     ]
 
     external_servers = [
         Cloud(instance_name='GoogleDrive', platforms=['Google Workspace'], connected_machines=['Firewall_2'], value=500, data_sources=googledrive_services,
-        outcomes=[LeakedCredentials(credentials=[Credential(port='HTTPS', machine='DatabaseServer', cred='DSI')])])
+        outcomes=[LeakedCredentials(credentials=[Credential(port='HTTPS', machine='DatabaseServer', cred='AccessDSI')])])
     ]
 
     firewalls = [
@@ -158,7 +158,7 @@ class DSI(Profile):
                     'MailServer': 0.3,
                     'CommunicationServer': 0.2,
                     'GoogleDrive': 0.3,
-            }, **dict([('PC_' + str(i), 0.2 / num_client) for i in range(num_client)])
+            }, **dict([('PC_' + str(i+1), 0.2 / num_client) for i in range(num_client)])
             }
         )
         super().__init__(name, behavior, preferences)
@@ -199,7 +199,7 @@ class Dev(Profile):
                     'MailServer': 0.2,
                     'CommunicationServer': 0.2
                 }, 
-                **dict([('PC_' + str(i), 0.1 / num_client) for i in range(num_client)])
+                **dict([('PC_' + str(i+1), 0.1 / num_client) for i in range(num_client)])
             }
         )
         super().__init__(name, behavior, preferences)

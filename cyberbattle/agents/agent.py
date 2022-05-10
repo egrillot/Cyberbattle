@@ -23,7 +23,7 @@ class Agent:
         """Define how the agent will explore the environment."""
         raise NotImplementedError
 
-    def learn(self) -> None:
+    def learn(self, env: CyberBattleEnv, reward: float) -> None:
         """Define how the agent will process, after have executed its action, the environment informations to learn and optimize its further decisions."""
         raise NotImplementedError
     
@@ -38,3 +38,15 @@ class Agent:
     def get_type(self) -> str:
         """Return the agent type."""
         return self.type
+    
+    def save(self, directory_path: str) -> None:
+        """Save the agent as a pickle file with the followings structure : (params, model)."""
+        raise NotImplementedError
+    
+    def loss(self) -> None:
+        """Return the model loss."""
+        raise NotImplementedError
+    
+    def new_episode(self) -> None:
+        """Reset some parameters for the new epoch."""
+        raise NotImplementedError

@@ -194,13 +194,13 @@ def plot_epsilon_greedy_search_result_attacker_alone(
 ) -> None:
     """Plot results of the provided simulation results."""
 
-    all_epochs_rewards, all_history = simulation_result
+    all_epochs_rewards, all_history, mean_loss = simulation_result
     n_epoch = len(all_epochs_rewards)
     lengths = [len(epoch) for epoch in all_epochs_rewards]
     longest_epoch_length = max(lengths)
     all_cumulatives_reward = np.zeros((n_epoch, longest_epoch_length), dtype=float)
 
-    fig, ax = plt.subplots(2, 2, figsize=(20, 10))
+    fig, ax = plt.subplots(3, 2, figsize=(30, 15))
     fig.suptitle(simulation_description, fontsize=14)
 
     for i, episode in enumerate(all_epochs_rewards):
@@ -257,5 +257,15 @@ def plot_epsilon_greedy_search_result_attacker_alone(
     ax[1, 1].set_title('Success rate by action type')
     ax[1, 1].set(xlabel='epoch', ylabel='rate')
     ax[1, 1].legend(loc='lower right')
+
+    ax[2, 0].plot(x, mean_loss)
+    ax[2, 0].set_title('Mean loss vs epoch')
+    ax[2, 0].set(xlabel='epoch', ylabel='mean loss')
+    ax[2, 0].legend(loc='lower right')
+
+    ax[2, 1].plot(x, [history['exploit -> explore'] for history in all_history])
+    ax[2, 1].set_title('Exploit to explore vs epoch')
+    ax[2, 1].set(xlabel='epoch', ylabel='deflection count')
+    ax[2, 1].legend(loc='lower right')
 
     plt.show()

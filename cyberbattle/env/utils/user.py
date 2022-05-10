@@ -1,5 +1,6 @@
 
 
+
 from typing import Dict, List, Tuple, Set
 import random
 
@@ -377,7 +378,7 @@ class EnvironmentProfiles:
         """Return the profile count."""
         return self.nb_profile
     
-    def get_profiles(self) -> Dict[Profile, int]:
+    def get_profiles(self) -> List[Profile]:
         """Return profiles."""
         return self.profiles
     
