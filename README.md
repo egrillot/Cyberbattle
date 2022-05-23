@@ -11,9 +11,9 @@
   </tr>
   <tr>
     <td>results</td>
-    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_1.gif", width='240' height='150'></td>
-    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_3.gif", width='240' height='150'></td>
-    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_125.gif",width='240' height='150'></td>
+    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_1.gif", width='300' height='200'></td>
+    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_3.gif", width='300' height='200'></td>
+    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_125.gif",width='300' height='200'></td>
   </tr>
   <tr>
     <td>epoch</td>
@@ -23,8 +23,8 @@
   </tr>
   <tr>
     <td>results</td>
-    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_165.gif", width='240' height='150'></td>
-    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_185.gif", width='240' height='150'></td>
-    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_219.gif", width='240' height='150'></td>
+    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_165.gif", width='300' height='200'></td>
+    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_185.gif", width='300' height='200'></td>
+    <td><img src="render/attacker/QleanerTrain/Alone/Epoch_219.gif", width='300' height='200'></td>
   </tr>
  </table>
