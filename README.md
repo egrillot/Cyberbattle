@@ -1,6 +1,10 @@
 # Cyberbattle
 
-## Qlearner training
+## Training attackers alone
+
+The animated graphics were chosen from the periods when the performance of the model was changing drastically. Afterwards, a summary of the training is available.
+
+### Qlearner
 
 <table>
   <tr>
@@ -27,4 +31,8 @@
     <td><img src="render/attacker/QleanerTrain/Alone/Epoch_185.gif", width='300' height='200'></td>
     <td><img src="render/attacker/QleanerTrain/Alone/Epoch_219.gif", width='300' height='200'></td>
   </tr>
+ </table>
+ 
+ <table>
+  <td><img src="render/attacker/QleanerTrain/Alone/summary.png", width='300' height='200'></td>
  </table>
