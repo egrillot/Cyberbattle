@@ -34,5 +34,5 @@ The animated graphics were chosen from the periods when the performance of the m
  </table>
  
  <table>
-  <td><img src="render/attacker/QleanerTrain/Alone/summary.png", width='800' height='200'></td>
+  <td><img src="render/attacker/QleanerTrain/Alone/summary.png", width='800' height='400'></td>
  </table>
