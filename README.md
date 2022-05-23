@@ -36,3 +36,36 @@ The animated graphics were chosen from the periods when the performance of the m
  <table>
   <td><img src="render/attacker/QleanerTrain/Alone/summary.png", width='800' height='400'></td>
  </table>
+ 
+ ### DeepQlearner
+ 
+ <table>
+  <tr>
+    <td><center>epoch</center></td>
+    <td><center>1</center></td>
+    <td><center>2</center></td>
+    <td><center>12</center></td>
+  </tr>
+  <tr>
+    <td><center>results</center></td>
+    <td><img src="render/attacker/DeepQleanerTrain/Alone/Epoch_1.gif", width='300' height='200'></td>
+    <td><img src="render/attacker/DeepQleanerTrain/Alone/Epoch_2.gif", width='300' height='200'></td>
+    <td><img src="render/attacker/DeepQleanerTrain/Alone/Epoch_12.gif",width='300' height='200'></td>
+  </tr>
+  <tr>
+    <td><center>epoch</center></td>
+    <td><center>27</center></td>
+    <td><center>45</center></td>
+    <td><center>413</center></td>
+  </tr>
+  <tr>
+    <td><center>results</center></td>
+    <td><img src="render/attacker/DeepQleanerTrain/Alone/Epoch_27.gif", width='300' height='200'></td>
+    <td><img src="render/attacker/DeepQleanerTrain/Alone/Epoch_45.gif", width='300' height='200'></td>
+    <td><img src="render/attacker/DeepQleanerTrain/Alone/Epoch_413.gif", width='300' height='200'></td>
+  </tr>
+ </table>
+ 
+ <table>
+  <td><img src="render/attacker/DeepQleanerTrain/Alone/summary.png", width='800' height='400'></td>
+ </table>
